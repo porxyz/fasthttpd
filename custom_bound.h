@@ -15,9 +15,9 @@
 #define HTTP_GET_ARGC (http_connection->request.URI_query.size())
 #define HTTP_GET_EXISTS(X) (http_connection->request.URI_query.find(X) != http_connection->request.URI_query.end())
 
-#define HTTP_POST_ARG(X) http_connection->request.POST_query[X]
-#define HTTP_POST_ARGC (http_connection->request.POST_query.size())
-#define HTTP_POST_ARG_EXISTS(X) (http_connection->request.POST_query.find(X) != http_connection->request.POST_query.end())
+#define HTTP_POST_ARG(X) http_connection->request.POST_query[0][X]
+#define HTTP_POST_ARGC (http_connection->request.POST_query) ? (http_connection->request.POST_query->size()) : 0
+#define HTTP_POST_ARG_EXISTS(X) (http_connection->request.POST_query) ? (http_connection->request.POST_query->find(X) != http_connection->request.POST_query->end()) : 0
 
 
 typedef void (*http_function_t)(std::list<struct http_connection>::iterator &current_connection,size_t thread_id);
