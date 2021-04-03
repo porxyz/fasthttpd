@@ -39,16 +39,15 @@ void db_insert_generator(std::list<struct http_connection>::iterator &http_conne
 		db_fields_sizes.push_back(HTTP_POST_ARG(db_fields[i]).size());
 	}
 	
-	
-
 
 	mysql_stmt_query db_query(http_workers[worker_id].mysql_db_handle);
 
-	if(db_query.query_handle == NULL or db_query.get_last_errno() != 0)
+	if(!db_query.get_native_handle())
 	{
 		echo("{\"status\":\"db_error\"}");
 		return;
 	}
+
 
 	db_query.prepare("INSERT INTO tanase VALUES(DEFAULT,?,?,?);",db_fields.size());
 	if(db_query.get_last_errno() != 0)

@@ -29,7 +29,7 @@ void post_test_gen(std::list<struct http_connection>::iterator &http_connection,
 	if(http_connection->request.request_method == HTTP_METHOD_POST)
 	{
 		echo("POST_ARGS[] <br>{<br>");
-		for(auto i=http_connection->request.POST_query.begin(); i!=http_connection->request.POST_query.end(); ++i)
+		for(auto i=http_connection->request.POST_query->begin(); i!=http_connection->request.POST_query->end(); ++i)
 		{
 			echo(html_ident);
 			echo(i->first);
@@ -46,33 +46,36 @@ void post_test_gen(std::list<struct http_connection>::iterator &http_connection,
 		echo("}<br><br>");
 
 
-		echo("POST_FILES[] <br>{<br>");
-		for(auto i=http_connection->request.POST_files->begin(); i!=http_connection->request.POST_files->end(); ++i)
+		if(http_connection->request.POST_type == HTTP_POST_MULTIPART_FORM_DATA)
 		{
-			echo(html_ident);
-			echo(i->first);
-			echo("[] <br>");
-			echo(html_ident);
-			echo("{<br>");
-
-			for(auto j=i->second.begin(); j!=i->second.end(); ++j)
+			echo("POST_FILES[] <br>{<br>");
+		
+			for(auto i=http_connection->request.POST_files->begin(); i!=http_connection->request.POST_files->end(); ++i)
 			{
 				echo(html_ident);
+				echo(i->first);
+				echo("[] <br>");
 				echo(html_ident);
-				echo(j->first);
-				echo(" => { type => ");
-				echo(j->second.type);
-				echo(" , data => string(");
-				echo(std::to_string(j->second.data.size()));
-				echo(") }<br>");	
-			}
+				echo("{<br>");
 
-			echo(html_ident);
-			echo("}<br>");
-		}
+				for(auto j=i->second.begin(); j!=i->second.end(); ++j)
+				{
+					echo(html_ident);
+					echo(html_ident);
+					echo(j->first);
+					echo(" => { type => ");
+					echo(j->second.type);
+					echo(" , data => string(");
+					echo(std::to_string(j->second.data.size()));
+					echo(") }<br>");	
+				}
+
+				echo(html_ident);
+				echo("}<br>");
+			}
 	
-		echo("}<br><br>");
-		
+			echo("}<br><br>");
+		}
 
 	}
 
