@@ -59,7 +59,7 @@ struct http_request
 	std::unordered_map <std::string , std::string> request_headers;
 	std::string URI_path;
 	std::unordered_map <std::string,std::string> URI_query;
-	std::unordered_map <std::string,std::string> POST_query;
+	std::unordered_map <std::string,std::string>* POST_query;
 	std::unordered_map<std::string, std::unordered_map<std::string,struct HTTP_POST_FILE>>* POST_files;
 };
 
@@ -150,8 +150,11 @@ bool send_all(std::list<struct http_connection>::iterator* current_connection);
 
 bool recv_all(std::list<struct http_connection>::iterator* current_connection,char* buff,size_t buff_size,size_t max_request_limit,bool* limit_exceeded);
 
-#endif
+void init_worker_aux_modules(int worker_id);
 
+void free_worker_aux_modules(int worker_id);
+
+#endif
 
 
 
