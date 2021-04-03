@@ -422,6 +422,13 @@ bool parse_http_request_POST_body(std::list<struct http_connection>::iterator* c
 
 	if(current_connection[0]->request.POST_type == HTTP_POST_MULTIPART_FORM_DATA)
 	{
+		current_connection[0]->request.POST_query = new (std::nothrow) std::unordered_map<std::string,std::string>();
+		if(!current_connection[0]->request.POST_query)
+		{
+			SERVER_ERROR_JOURNAL_stdlib_err("Unable to allocate memory for the HTTP_POST_QUERY structure!");
+        		exit(-1);
+		}
+		
 		current_connection[0]->request.POST_files = new (std::nothrow) std::unordered_map<std::string,std::unordered_map<std::string, struct HTTP_POST_FILE>>();
 		if(!current_connection[0]->request.POST_files)
 		{
@@ -454,15 +461,23 @@ bool parse_http_request_POST_body(std::list<struct http_connection>::iterator* c
 
 		std::string boundary = content_type_iter->second.substr(boundary_string_pos + 9); // strlen("boundary=")
 		
-		
-		parse_result = parse_multipart_form_data(&(current_connection[0]->recv_buffer),&boundary,&(current_connection[0]->request.POST_query),current_connection[0]->request.POST_files,
+		parse_result = parse_multipart_form_data(&(current_connection[0]->recv_buffer),&boundary,current_connection[0]->request.POST_query,current_connection[0]->request.POST_files,
 							      args_limit,files_limit,&args_limit_exceeded,&files_limit_exceeded,continue_if_exceeded);
 		
 	}
 
 	else if(current_connection[0]->request.POST_type == HTTP_POST_APPLICATION_X_WWW_FORM_URLENCODED)
-		parse_result = parse_http_query(&(current_connection[0]->recv_buffer),&(current_connection[0]->request.POST_query),args_limit,
+	{
+		current_connection[0]->request.POST_query = new (std::nothrow) std::unordered_map<std::string,std::string>();
+		if(!current_connection[0]->request.POST_query)
+		{
+			SERVER_ERROR_JOURNAL_stdlib_err("Unable to allocate memory for the HTTP_POST_QUERY structure!");
+        		exit(-1);
+		}
+		
+		parse_result = parse_http_query(&(current_connection[0]->recv_buffer),current_connection[0]->request.POST_query,args_limit,
 						&args_limit_exceeded,continue_if_exceeded,start_position + (use_standard_newline ? 4 : 2));
+	}
 
 	else
 		return false;
@@ -1253,6 +1268,7 @@ void worker_add_client(int new_client,const char* remote_addr,std::string* serve
 	
 	current_connection.request.request_method = HTTP_METHOD_UNDEFINED;
 	current_connection.request.POST_type = HTTP_POST_TYPE_UNDEFINED;
+	current_connection.request.POST_query = NULL;
 	current_connection.request.POST_files = NULL;
 	
 	current_connection.response.response_headers["Server"] = SERVER_CONFIGURATION["server_name"];
@@ -1315,7 +1331,10 @@ void free_http_connection(std::list<struct http_connection>::iterator* current_c
 	current_connection[0]->request.request_headers.clear();
 	current_connection[0]->request.URI_path.clear();
 	current_connection[0]->request.URI_query.clear();
-	current_connection[0]->request.POST_query.clear();
+	
+	
+	if(current_connection[0]->request.POST_query)
+		delete(current_connection[0]->request.POST_query);
 	
 	if(current_connection[0]->request.POST_files)
 		delete(current_connection[0]->request.POST_files);
@@ -1349,7 +1368,19 @@ void delete_http_connection(size_t worker_id,std::list<struct http_connection>::
 			current_connection[0]->response.response_headers["Date"] = convert_ctime2_http_date(time(NULL));
 			current_connection[0]->response.response_headers["Connection"] = "close";
 
-			current_connection[0]->request.POST_files = NULL;
+			
+			if(current_connection[0]->request.POST_query)
+			{
+				delete(current_connection[0]->request.POST_query);
+				current_connection[0]->request.POST_query = NULL;
+			}
+	
+			if(current_connection[0]->request.POST_files)
+			{
+				delete(current_connection[0]->request.POST_files);
+				current_connection[0]->request.POST_files = NULL;
+			}
+		
 			current_connection[0]->request.POST_type = HTTP_POST_TYPE_UNDEFINED;
 					
 			current_connection[0]->http_version = HTTP_VERSION_UNDEFINED;
@@ -1372,10 +1403,8 @@ void delete_http_connection(size_t worker_id,std::list<struct http_connection>::
 
 	if(lock_mutex)
 		http_workers[worker_id].connections_mutex->lock();
-		
-		
+			
 	http_workers[worker_id].connections.erase(current_connection[0]);
-	
 	
 	if(lock_mutex)
 		http_workers[worker_id].connections_mutex->unlock();
@@ -1389,6 +1418,8 @@ void delete_http_connection(size_t worker_id,std::list<struct http_connection>::
 
 void http_worker_thread(int worker_id)
 {
+    init_worker_aux_modules(worker_id);
+    
     struct epoll_event triggered_event;
 
     size_t max_request_size = str2uint(&SERVER_CONFIGURATION["max_request_size"]) * 1024;
@@ -2064,13 +2095,10 @@ void http_worker_thread(int worker_id)
 
     }
 
-    delete(recv_buffer);
+    delete[] recv_buffer;
     delete(http_workers[worker_id].connections_mutex);
     close(http_workers[worker_id].worker_epoll);
-
-#ifndef NO_MOD_MYSQL
-    delete(http_workers[worker_id].mysql_db_handle);
-#endif
+    
 
     for(std::list<struct http_connection>::iterator i = http_workers[worker_id].connections.begin(); i != http_workers[worker_id].connections.end(); ++i)
     {
@@ -2078,7 +2106,9 @@ void http_worker_thread(int worker_id)
         i++;
         delete_http_connection(worker_id,&conn,false,false);
     }
-
+    
+    
+    free_worker_aux_modules(worker_id);
 }
 
 void init_workers(int close_trigger)
@@ -2105,27 +2135,12 @@ void init_workers(int close_trigger)
 		}
 
 
-		#ifndef NO_MOD_MYSQL
-		this_worker.mysql_db_handle = new (std::nothrow) mysql_connection();
-		if(this_worker.mysql_db_handle == NULL)
-		{
-                        SERVER_ERROR_JOURNAL_stdlib_err("MOD_MYSQL: Unable to allocate memory for the mysql connection!");
-			exit(-1);
-		}
-
-
-		if(server_config_variable_exists("enable_MOD_MYSQL") and (SERVER_CONFIGURATION["enable_MOD_MYSQL"] == std::string("1") or SERVER_CONFIGURATION["enable_MOD_MYSQL"] == std::string("true")) )
-			init_MYSQL_connection(this_worker.mysql_db_handle);
-
-		#endif
-
 		http_workers.push_back(this_worker);
 		http_workers[http_workers.size() - 1].worker_thread = new std::thread(http_worker_thread,http_workers.size() -1);
 		http_workers[http_workers.size() - 1].connections_mutex = new std::mutex();
 		
 	}
 }
-
 
 
 void wait_for_workers_to_exit()
@@ -2137,6 +2152,34 @@ void wait_for_workers_to_exit()
 	}
 	
 }
+
+void init_worker_aux_modules(int worker_id)
+{
+	#ifndef NO_MOD_MYSQL
+	http_workers[worker_id].mysql_db_handle = new (std::nothrow) mysql_connection();
+	if(http_workers[worker_id].mysql_db_handle == NULL)
+	{
+        	SERVER_ERROR_JOURNAL_stdlib_err("MOD_MYSQL: Unable to allocate memory for the mysql connection!");
+		exit(-1);
+	}
+
+
+	if(is_server_config_variable_true("enable_MOD_MYSQL"))
+		init_MYSQL_connection(http_workers[worker_id].mysql_db_handle);
+
+	#endif
+}
+
+
+void free_worker_aux_modules(int worker_id)
+{
+	#ifndef NO_MOD_MYSQL
+	delete(http_workers[worker_id].mysql_db_handle);
+	#endif
+}
+
+
+
 
 
 
