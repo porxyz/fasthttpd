@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8'>
+<title>File upload test</title>
+
+<style type='text/css'>
+
+html,body
+{
+  padding:0;
+  margin:0;
+}
+
+#form_table
+{
+  position:absolute;
+  left:50%;
+  top:20%;
+  transform:translateX(-50%);
+}
+
+#form_submit_button
+{
+font-weight:bold;
+border-radius:3px;
+padding-top:7px;
+padding-bottom:7px;
+background: linear-gradient(to bottom, #ff9d4d 0%,#ff6a0d 100%);
+border:1px solid black;
+width:65%;
+position:relative;
+}
+
+#form_submit_button:hover
+{
+background: linear-gradient(to bottom, #ff7033 0%,#f63900 100%);
+cursor:pointer;
+box-shadow: 0 0 1px 3px rgba(200,70,30,0.75);
+}
+
+.in_field
+{
+border:1px solid black;
+border-radius:3px;
+padding:4px;
+}
+
+.in_field:focus
+{
+box-shadow: 0 0 1px 2px rgba(50,70,200,0.75);
+}
+
+</style>
+
+
+</head>
+
+<body>
+
+<form action="/post_test?foo=bar&baz=123" method="post" enctype="multipart/form-data">
+<table id="form_table">
+<tbody>
+
+
+<tr><td style='text-align:center; font-size:180%; font-weight:bold; padding-bottom:25px; -webkit-text-stroke:1px black; color:white;' colspan='2'>File upload test</td></tr>
+<tr><td>Name:</td><td><input name='name' type='text' class='in_field'></td></tr>
+<tr><td>File1:</td><td><input name='file1' type='file' class='in_field'></td></tr>
+<tr><td>Multiple files:</td><td><input name='specialfiles' type='file' class='in_field' multiple></td></tr>
+<tr><td colspan='2' style='text-align:center; padding-top:20px;'><input type="submit" id="form_submit_button" value="Upload"></td></tr>
+
+
+</tbody>
+</table>
+</form>
+
+
+</body>
+</html>
