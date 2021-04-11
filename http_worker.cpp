@@ -1645,25 +1645,29 @@ void http_worker_thread(int worker_id)
                         }
                     }
 
-
+			
                     // decode url path and query args
-                    if(!parse_http_URI(&triggered_connection[0]->recv_buffer,&triggered_connection[0]->request.URI_path,&triggered_connection[0]->request.URI_query,max_query_arg_limit,continue_if_arg_limit_exceeded))
+                    if(triggered_connection[0]->request.URI_path.empty())
                     {
-                    	SERVER_JOURNAL_WRITE_ERROR.lock();
-                        SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true);
-                        SERVER_JOURNAL_WRITE(" The request URI can't be parsed!\n\n",true);
-                        SERVER_JOURNAL_WRITE_ERROR.unlock();
-                            
-                        set_http_error_page(triggered_connection,400);
-                        if(!send_all(triggered_connection))
+                        if(!parse_http_URI(&triggered_connection[0]->recv_buffer,&triggered_connection[0]->request.URI_path,&triggered_connection[0]->request.URI_query,
+                                           max_query_arg_limit,continue_if_arg_limit_exceeded))
                         {
-                            delete_http_connection(worker_id,triggered_connection);
+                            SERVER_JOURNAL_WRITE_ERROR.lock();
+                            SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true);
+                            SERVER_JOURNAL_WRITE(" The request URI can't be parsed!\n\n",true);
+                            SERVER_JOURNAL_WRITE_ERROR.unlock();
+                            
+                            set_http_error_page(triggered_connection,400);
+                            if(!send_all(triggered_connection))
+                            {
+                                delete_http_connection(worker_id,triggered_connection);
+                                continue;
+                            }
+                            if(triggered_connection[0]->send_buffer_offset == triggered_connection[0]->send_buffer.size())
+                                delete_http_connection(worker_id,triggered_connection);
+
                             continue;
                         }
-                        if(triggered_connection[0]->send_buffer_offset == triggered_connection[0]->send_buffer.size())
-                            delete_http_connection(worker_id,triggered_connection);
-
-                        continue;
                     }
 
                     if(triggered_connection[0]->recv_buffer.find("\r\n\r\n") != std::string::npos) // request not fully transmitted
@@ -1776,8 +1780,12 @@ void http_worker_thread(int worker_id)
                     struct custom_bound_entry custom_page_generator;
                     if(check_custom_bound_path(&full_path,&real_hostname,&custom_page_generator))
                     {
-                    
-                    	if(triggered_connection[0]->request.request_method == HTTP_METHOD_POST && triggered_connection[0]->request.POST_type == HTTP_POST_TYPE_UNDEFINED && is_POST_request_complete(triggered_connection))
+                        // perform checking if the request is fully loaded
+                        if(triggered_connection[0]->request.request_method == HTTP_METHOD_POST && !is_POST_request_complete(triggered_connection))
+                            continue;
+			    
+			//parse POST request if fully loaded  
+                    	if(triggered_connection[0]->request.request_method == HTTP_METHOD_POST && triggered_connection[0]->request.POST_type == HTTP_POST_TYPE_UNDEFINED)
                     	{ 
                     		if(triggered_connection[0]->request.request_headers.find("Content-Type") != triggered_connection[0]->request.request_headers.end())
 				{
