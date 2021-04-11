@@ -1,5 +1,4 @@
 #include "../http_worker.h"
-#include "../mod_mysql.h"
 
 
 //this function is run against the http request 
