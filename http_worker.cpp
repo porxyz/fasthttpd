@@ -1839,7 +1839,7 @@ void http_worker_thread(int worker_id)
                     }
 
                     full_path = rectify_path(&full_path);
-                    std::cout << full_path << std::endl;
+                    //std::cout << full_path << std::endl;
 
                     uint64_t requested_file_size; time_t requested_file_mdate; bool is_folder;
                     if(get_file_info(&full_path,&requested_file_size,&requested_file_mdate,&is_folder) == -1) // get file size and modification date
