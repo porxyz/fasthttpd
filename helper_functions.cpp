@@ -509,26 +509,47 @@ bool url_decode(const std::string* s,std::string* result)
 
 std::string rectify_path(const std::string* path)
 {
+    if(!path)
+        return std::string();
+        
 	std::string result;
-	std::vector<std::string> path_tree;
+	std::vector<std::string> path_tree, rectified_path_tree;
 	explode(path,"/",&path_tree);
-	int path_depth = 0;
 
-	if(path[0][0] == '/')
-		path_tree[1].insert(0,1,'/');
 
 	for(size_t i=0; i < path_tree.size(); i++)
 	{
-		if(path_tree[i] == "." or path_tree[i].size() == 0)
+		if(path_tree[i] == "." or path_tree[i].empty())
 			continue;
+			
+		else if(path_tree[i] == "..")
+		{
+			if(!rectified_path_tree.empty())
+				rectified_path_tree.pop_back();
+			else
+				continue;
+		}
+				
+		else
+			rectified_path_tree.push_back(path_tree[i]);
+		
+	}
+	
+	path_tree.clear();
+	
+	
 
-		if(path_depth != 0)
+	    
+	if(path[0][0] == '/' && !rectified_path_tree.empty())
+	    rectified_path_tree[0].insert(0,1,'/');
+	
+	
+	for(size_t i=0; i < rectified_path_tree.size(); i++)
+	{
+		if(i != 0)
 			result.append("/");
 		
-			
-		result.append(path_tree[i]);
-		path_depth++;
-
+		result.append(rectified_path_tree[i]);
 	}
 
 
@@ -703,34 +724,6 @@ std::string convert_ctime2_http_date(time_t t)
 
 
 
-std::string html_special_chars_escape(const std::string* s)
-{
-	std::string result;
-
-	for(size_t i=0; i<s->size(); i++)
-	{
-		if(s[0][i] == '<')
-			result.append("&lt;");
-			
-		else if(s[0][i] == '>')
-			result.append("&gt;");
-		
-		else if(s[0][i] == '"')
-			result.append("&quot;");
-		
-		else if(s[0][i] == '\'')
-			result.append("&#039;");
-		
-		else if(s[0][i] == '&')
-			result.append("&amp;");
-		
-		else
-			result.append(1,s[0][i]);
-
-	}
-
-	return result;
-}
 
 
 std::string html_special_chars_escape(const char* s)
@@ -763,6 +756,15 @@ std::string html_special_chars_escape(const char* s)
 	return result;
 }
 
+
+std::string html_special_chars_escape(const std::string* s)
+{
+	if(!s)
+		return std::string();
+
+		
+	return html_special_chars_escape(s->c_str());
+}
 
 std::string get_OS_name()
 {

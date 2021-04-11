@@ -15,12 +15,15 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <dirent.h>
+
+#ifndef DISABLE_HTTPS
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include "https_listener.h"
+#endif
 
 #include "helper_functions.h"
 #include "server_journal.h"
-#include "https_listener.h"
 #include "server_config.h"
 #include "file_permissions.h"
 #include "custom_bound.h"
@@ -40,11 +43,15 @@ bool recv_all(std::list<struct http_connection>::iterator* current_connection,ch
 
 
 	sock_read_proc:
+	
+	#ifndef DISABLE_HTTPS
 	if(current_connection[0]->https)
 		recv_len = SSL_read(current_connection[0]->ssl_connection,buff,buff_size);
 		
 	else
+	#endif
 		recv_len = recv(current_connection[0]->client_socket,buff,buff_size,0);
+		
 
 	if(recv_len > 0)
 	{
@@ -67,7 +74,7 @@ bool recv_all(std::list<struct http_connection>::iterator* current_connection,ch
 
 	else
 	{
-
+		#ifndef DISABLE_HTTPS
 		if(current_connection[0]->https)
 		{
 			int ssl_error = SSL_get_error(current_connection[0]->ssl_connection,recv_len);
@@ -77,11 +84,11 @@ bool recv_all(std::list<struct http_connection>::iterator* current_connection,ch
 				SERVER_ERROR_JOURNAL_openssl_err("Unable read from the ssl client socket!");
 				return false;
 			}
-
 		}
 
 		else
 		{
+		#endif
 		
 			if(errno == EINTR)
 				goto sock_read_proc;
@@ -92,7 +99,9 @@ bool recv_all(std::list<struct http_connection>::iterator* current_connection,ch
 				return false;
 			}
 
+		#ifndef DISABLE_HTTPS
 		}
+		#endif
 	}
 
 	limit_exceeded[0] = false;
@@ -107,10 +116,12 @@ bool send_all(std::list<struct http_connection>::iterator* current_connection)
 	sock_send_proc:
 	char* send_buff = ((char*)current_connection[0]->send_buffer.c_str()) + current_connection[0]->send_buffer_offset;
 
+	#ifndef DISABLE_HTTPS
 	if(current_connection[0]->https)
 		send_len = SSL_write(current_connection[0]->ssl_connection,send_buff,(current_connection[0]->send_buffer.size() - current_connection[0]->send_buffer_offset));
 		
 	else
+	#endif
 		send_len = send(current_connection[0]->client_socket,send_buff,(current_connection[0]->send_buffer.size() - current_connection[0]->send_buffer_offset),0);
 
 
@@ -125,7 +136,7 @@ bool send_all(std::list<struct http_connection>::iterator* current_connection)
 
 	else
 	{
-
+		#ifndef DISABLE_HTTPS
 		if(current_connection[0]->https)
 		{
 			int ssl_error = SSL_get_error(current_connection[0]->ssl_connection,send_len);
@@ -135,12 +146,11 @@ bool send_all(std::list<struct http_connection>::iterator* current_connection)
 				SERVER_ERROR_JOURNAL_openssl_err("Unable to send through the ssl client socket!");
 				return false;
 			}
-
 		}
-
 
 		else
 		{
+		#endif
 			if(errno == EINTR)
 				goto sock_send_proc;
 
@@ -150,7 +160,9 @@ bool send_all(std::list<struct http_connection>::iterator* current_connection)
 				return false;
 			}
 
+		#ifndef DISABLE_HTTPS
 		}
+		#endif
 	}
 
 	return true;
@@ -376,14 +388,17 @@ bool parse_http_URI(const std::string* raw_request,std::string* URI,std::unorder
 		return false; 
 
 
+        std::string raw_URI;
 	size_t query_mark = raw_request->find('?',first_space_separator);
 	if(query_mark == std::string::npos or query_mark > second_space_separator)
 	{
-		URI[0] = raw_request->substr(first_space_separator+1,(second_space_separator-first_space_separator) - 1);
-		return true;
+                raw_URI = std::move(raw_request->substr(first_space_separator+1,(second_space_separator-first_space_separator) - 1));
+                return url_decode(&raw_URI,URI);
 	}
 
-	URI[0] = raw_request->substr(first_space_separator+1,(query_mark-first_space_separator) - 1);
+        raw_URI = std::move(raw_request->substr(first_space_separator+1,(query_mark-first_space_separator) - 1));
+        if(!url_decode(&raw_URI,URI))
+            return false;
 
 	bool arg_limit_exceeded;
 	bool parse_result = parse_http_query(raw_request,URI_query_params,max_arg_limit,&arg_limit_exceeded,continue_if_exceeded,query_mark+1,second_space_separator-1);
@@ -1099,6 +1114,7 @@ void set_http_error_page(std::list<struct http_connection>::iterator* current_co
 		str_replace_first(&current_connection[0]->response.response_body,"$HOSTNAME",&current_connection[0]->request.request_headers["Host"]);
 
 
+	#ifndef DISABLE_HTTPS
 	if(current_connection[0]->https)
 	{
 		std::string ssl_info = "("; ssl_info.append(OPENSSL_VERSION_TEXT);
@@ -1106,6 +1122,7 @@ void set_http_error_page(std::list<struct http_connection>::iterator* current_co
 		str_replace_first(&current_connection[0]->response.response_body,"$SSL_INFO",&ssl_info);
 	}
 	else
+	#endif
 		str_replace_first(&current_connection[0]->response.response_body,"$SSL_INFO","");
 
 
@@ -1125,6 +1142,9 @@ void set_http_error_page(std::list<struct http_connection>::iterator* current_co
 
 void generate_http_folder_response(const std::string* full_path,std::list<struct http_connection>::iterator* current_connection)
 {
+	if(!full_path or !current_connection)
+		return;
+	
 	struct dirent* dir_entry;
 	DIR* folder = opendir(full_path->c_str());
 
@@ -1136,98 +1156,117 @@ void generate_http_folder_response(const std::string* full_path,std::list<struct
 
 	current_connection[0]->response.response_code = 200;
 	current_connection[0]->response.response_headers["Content-Type"] = "text/html; charset=utf-8";
-	current_connection[0]->request.request_headers["Accept-Ranges"] = "none";
-
-	current_connection[0]->response.response_body = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Directory listening</title></head><body>"
-							"<p style=\"position:relative; font-size:125%; left:1%; width:98%; border-bottom:2px solid gray;\">Directory listening of <span style=\"font-style:italic;\">";
+	current_connection[0]->response.response_headers["Accept-Ranges"] = "none";
+	
+	
+	std::string directory_listing_content;
+	std::string top_title = "<p style=\"position:relative; font-size:125%; left:1%; width:98%; border-bottom:2px solid gray;\">Directory listing of <span style=\"font-style:italic;\">";
+	
 
 	if(current_connection[0]->request.URI_path.size() > 128)
 	{
-		std::string short_url = current_connection[0]->request.URI_path.substr(0,128);
+                std::string short_url = std::move(current_connection[0]->request.URI_path.substr(0,125));
 		short_url.append("...");
-		current_connection[0]->response.response_body.append(html_special_chars_escape(&short_url));
+                top_title.append(std::move(html_special_chars_escape(&short_url)));
 	}
 	else
-		current_connection[0]->response.response_body.append(html_special_chars_escape(&current_connection[0]->request.URI_path));
+                top_title.append(std::move(html_special_chars_escape(&current_connection[0]->request.URI_path)));
 
 
-	current_connection[0]->response.response_body.append("</span></p><br>");
+        top_title.append("</span></p>");
 
-	std::string file_link;
 
-	size_t num_links = 0;
+
+	std::string file_link_base = current_connection[0]->request.URI_path;  
+
+	file_link_base = std::move(rectify_path(&file_link_base));
+	
+	if(file_link_base[file_link_base.size() - 1] != '/')
+		file_link_base.append(1,'/');
+	
+	
+	directory_listing_content.append("<p><a href=\"");
+	directory_listing_content.append(std::move( std::string(file_link_base).append("..") ));
+	directory_listing_content.append("\">..</a></p>\n");
+	
+        size_t num_links = 1;
 	while ((dir_entry = readdir(folder)) != NULL)
 	{
 
 		if(num_links == 128)
 		{
-			current_connection[0]->response.response_body.append("<p>...</p>");
+			directory_listing_content.append("<p>...</p>\n");
 			break;
 		}
 
 
-		if(strcmp(".",dir_entry->d_name) == 0 or strcmp(".access_config",dir_entry->d_name) == 0)
+                if(strcmp(".",dir_entry->d_name) == 0 or strcmp("..",dir_entry->d_name) == 0 or strcmp(".access_config",dir_entry->d_name) == 0)
 			continue;
 
-		file_link = current_connection[0]->request.URI_path;  
+		std::string file_link = file_link_base;  
 
-		if(current_connection[0]->request.URI_path[current_connection[0]->request.URI_path.size() - 1] != '/')
-			file_link.append(1,'/');
-			
 			
 		file_link.append(dir_entry->d_name);
 
-		file_link = rectify_path(&file_link);
-
-		current_connection[0]->response.response_body.append("<p><a href=\"");
-		current_connection[0]->response.response_body.append(file_link);
-		current_connection[0]->response.response_body.append("\">");
+		directory_listing_content.append("<p><a href=\"");
+		directory_listing_content.append(std::move(file_link));
+		directory_listing_content.append("\">");
 
 		if(strlen(dir_entry->d_name) < 128)
-			current_connection[0]->response.response_body.append(html_special_chars_escape(dir_entry->d_name));
+			directory_listing_content.append(std::move(html_special_chars_escape(dir_entry->d_name)));
 
 		else
 		{
-			std::string trimmed_d_name = dir_entry->d_name; trimmed_d_name.append("...");
-			current_connection[0]->response.response_body.append(html_special_chars_escape(&trimmed_d_name));
+			std::string trimmed_d_name = dir_entry->d_name;
+			trimmed_d_name = std::move(trimmed_d_name.substr(0,125));
+			trimmed_d_name.append("...");
+			directory_listing_content.append(std::move(html_special_chars_escape(&trimmed_d_name)));
 		}
 
-		current_connection[0]->response.response_body.append("</a></p>");
-		num_links+=1;
+		directory_listing_content.append("</a></p>\n");
+		num_links++;
 	}
 
 	closedir(folder);
 
 
-	current_connection[0]->response.response_body.append("<p style=\"position:absolute; left:1%; width:98%; border-top:2px solid gray; bottom:0; font-style: italic;\">");
-	current_connection[0]->response.response_body.append(SERVER_CONFIGURATION["server_name"]);
-	current_connection[0]->response.response_body.append("/");
-	current_connection[0]->response.response_body.append(SERVER_CONFIGURATION["server_version"]);
-	current_connection[0]->response.response_body.append(" (");
-	current_connection[0]->response.response_body.append(SERVER_CONFIGURATION["os_name"]);
-	current_connection[0]->response.response_body.append("/");
-	current_connection[0]->response.response_body.append(SERVER_CONFIGURATION["os_version"]);
-	current_connection[0]->response.response_body.append(") on ");
+	std::string footer = SERVER_CONFIGURATION["server_name"];
+	footer.append("/");
+	footer.append(SERVER_CONFIGURATION["server_version"]);
+	footer.append(" (");
+	footer.append(SERVER_CONFIGURATION["os_name"]);
+	footer.append("/");
+	footer.append(SERVER_CONFIGURATION["os_version"]);
+	footer.append(") on ");
 
 	if(current_connection[0]->request.request_headers.find("Host") == current_connection[0]->request.request_headers.end())
-		current_connection[0]->response.response_body.append(SERVER_CONFIGURATION["default_host"]);
+		footer.append(SERVER_CONFIGURATION["default_host"]);
 
 	else
-		current_connection[0]->response.response_body.append(current_connection[0]->request.request_headers["Host"]);
+		footer.append(current_connection[0]->request.request_headers["Host"]);
 
 
-	current_connection[0]->response.response_body.append(" port ");
-	current_connection[0]->response.response_body.append(int2str(current_connection[0]->server_port).c_str());
+	footer.append(" port ");
+	footer.append(std::move(int2str(current_connection[0]->server_port).c_str()));
 
+
+	#ifndef DISABLE_HTTPS
 	if(current_connection[0]->https)
 	{
-		current_connection[0]->response.response_body.append(" (");
-		current_connection[0]->response.response_body.append(OPENSSL_VERSION_TEXT);
-		current_connection[0]->response.response_body.append(")");
+		footer.append(" (");
+		footer.append(OPENSSL_VERSION_TEXT);
+		footer.append(")");
 	}	
-
-	current_connection[0]->response.response_body.append("</body></html>");
-	current_connection[0]->response.response_headers["Content-Length"] = int2str(current_connection[0]->response.response_body.size());
+	#endif
+	
+	
+	current_connection[0]->response.response_body = SERVER_DIRECTORY_LISTING_TEMPLATE;
+	
+	str_replace_first(&current_connection[0]->response.response_body,"$top_title",&top_title);
+	str_replace_first(&current_connection[0]->response.response_body,"$dir_content",&directory_listing_content);
+	str_replace_first(&current_connection[0]->response.response_body,"$footer",&footer);
+	
+	current_connection[0]->response.response_headers["Content-Length"] = std::move(int2str(current_connection[0]->response.response_body.size()));
 
 
 	if(current_connection[0]->request.request_method == HTTP_METHOD_HEAD)
@@ -1237,7 +1276,12 @@ void generate_http_folder_response(const std::string* full_path,std::list<struct
 	current_connection[0]->state = HTTP_STATE_CONTENT_BOUND;
 }
 
-void worker_add_client(int new_client,const char* remote_addr,std::string* server_addr,int16_t remote_port,int16_t server_port,int ip_addr_version,bool https,SSL_CTX* openssl_ctx)
+void worker_add_client(int new_client,const char* remote_addr,std::string* server_addr,int16_t remote_port,int16_t server_port,
+		       int ip_addr_version,bool https
+		       #ifndef DISABLE_HTTPS
+		       ,SSL_CTX* openssl_ctx
+		       #endif
+		       )
 {
 	int worker_id;
 	
@@ -1277,6 +1321,7 @@ void worker_add_client(int new_client,const char* remote_addr,std::string* serve
 	current_connection.response.response_headers["Date"] = convert_ctime2_http_date(time(NULL));
 	current_connection.response.response_headers["Connection"] = "close";
 
+	#ifndef DISABLE_HTTPS
 	if(https)
 	{
 		current_connection.ssl_connection = SSL_new(openssl_ctx);
@@ -1288,7 +1333,7 @@ void worker_add_client(int new_client,const char* remote_addr,std::string* serve
 
 		SSL_set_fd(current_connection.ssl_connection,new_client);
 	}
-
+	#endif
 
 	if(clock_gettime(CLOCK_MONOTONIC,&current_connection.last_action) == -1)
 	{
@@ -1334,10 +1379,16 @@ void free_http_connection(std::list<struct http_connection>::iterator* current_c
 	
 	
 	if(current_connection[0]->request.POST_query)
+        {
 		delete(current_connection[0]->request.POST_query);
+                current_connection[0]->request.POST_query = NULL;
+        }
 	
 	if(current_connection[0]->request.POST_files)
+        {
 		delete(current_connection[0]->request.POST_files);
+                current_connection[0]->request.POST_files = NULL;
+        }
 
 	if(current_connection[0]->state == HTTP_STATE_FILE_BOUND and current_connection[0]->requested_fd != -1)
 	{
@@ -1397,8 +1448,10 @@ void delete_http_connection(size_t worker_id,std::list<struct http_connection>::
 
 	close(current_connection[0]->client_socket);
 
+	#ifndef DISABLE_HTTPS
 	if(current_connection[0]->https)
 		SSL_free(current_connection[0]->ssl_connection);
+	#endif
 
 
 	if(lock_mutex)
@@ -1429,9 +1482,12 @@ void http_worker_thread(int worker_id)
     unsigned int max_upload_files_limit = str2uint(&SERVER_CONFIGURATION["max_uploaded_files"]);
     
     bool continue_if_arg_limit_exceeded = false;
-    if(server_config_variable_exists("continue_if_args_limit_exceeded") && (SERVER_CONFIGURATION["continue_if_args_limit_exceeded"] == "1" or SERVER_CONFIGURATION["continue_if_args_limit_exceeded"] == "true"))
+    if(is_server_config_variable_true("continue_if_args_limit_exceeded"))
     	continue_if_arg_limit_exceeded = true;
     
+    bool strict_hosts = true;
+    if(is_server_config_variable_false("strict_hosts"))
+        strict_hosts= false;
 
     size_t recv_buffer_size = str2uint(&SERVER_CONFIGURATION["read_buffer_size"]) * 1024;
     char* recv_buffer = new (std::nothrow) char[recv_buffer_size];
@@ -1650,24 +1706,36 @@ void http_worker_thread(int worker_id)
                         triggered_connection[0]->request.request_headers["Host"] = SERVER_CONFIGURATION["default_host"];
                     }
 
+
+
+                    std::string real_hostname;
+
                     if(SERVER_HOSTNAMES.find(triggered_connection[0]->request.request_headers["Host"]) == SERVER_HOSTNAMES.end()) // bad host
                     {
-                    	SERVER_JOURNAL_WRITE_ERROR.lock();
-                        SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true);
-                        SERVER_JOURNAL_WRITE(" The requested host is not defined in the hosts list!\n\n",true);
-                        SERVER_JOURNAL_WRITE_ERROR.unlock();
-                        
-                        set_http_error_page(triggered_connection,400);
-                        if(!send_all(triggered_connection))
+                        if(strict_hosts)
                         {
-                            delete_http_connection(worker_id,triggered_connection);
+                            SERVER_JOURNAL_WRITE_ERROR.lock();
+                            SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true);
+                            SERVER_JOURNAL_WRITE(" The requested host is not defined in the hosts list!\n\n",true);
+                            SERVER_JOURNAL_WRITE_ERROR.unlock();
+                        
+                            set_http_error_page(triggered_connection,400);
+                            if(!send_all(triggered_connection))
+                            {
+                                delete_http_connection(worker_id,triggered_connection);
+                                continue;
+                            }
+                            if(triggered_connection[0]->send_buffer_offset == triggered_connection[0]->send_buffer.size())
+                                delete_http_connection(worker_id,triggered_connection);
+
                             continue;
                         }
-                        if(triggered_connection[0]->send_buffer_offset == triggered_connection[0]->send_buffer.size())
-                            delete_http_connection(worker_id,triggered_connection);
-
-                        continue;
+                        else
+                            real_hostname = SERVER_CONFIGURATION["default_host"];
                     }
+                    else
+                        real_hostname = triggered_connection[0]->request.request_headers["Host"];
+
 
                     // keep alive
                     if(triggered_connection[0]->request.request_headers.find("Connection") != triggered_connection[0]->request.request_headers.end() and triggered_connection[0]->request.request_headers["Connection"] == "keep-alive")
@@ -1684,12 +1752,12 @@ void http_worker_thread(int worker_id)
                         continue;
 
 
-
-                    std::string full_path = SERVER_HOSTNAMES[triggered_connection[0]->request.request_headers["Host"]];
+                    std::string full_path = SERVER_HOSTNAMES[real_hostname];
                     full_path.append(1,'/');
-                    full_path.append(triggered_connection[0]->request.URI_path);
+                    full_path.append(rectify_path(&triggered_connection[0]->request.URI_path));
 
-                    int check_file_code = check_file_access(&full_path,&SERVER_HOSTNAMES[triggered_connection[0]->request.request_headers["Host"]]);
+
+                    int check_file_code = check_file_access(&full_path,&real_hostname);
                     if(check_file_code != 0)
                     {
                         set_http_error_page(triggered_connection,check_file_code);
@@ -1706,7 +1774,7 @@ void http_worker_thread(int worker_id)
 
 
                     struct custom_bound_entry custom_page_generator;
-                    if(check_custom_bound_path(&full_path,&SERVER_HOSTNAMES[triggered_connection[0]->request.request_headers["Host"]],&custom_page_generator))
+                    if(check_custom_bound_path(&full_path,&real_hostname,&custom_page_generator))
                     {
                     
                     	if(triggered_connection[0]->request.request_method == HTTP_METHOD_POST && triggered_connection[0]->request.POST_type == HTTP_POST_TYPE_UNDEFINED && is_POST_request_complete(triggered_connection))
@@ -1771,6 +1839,7 @@ void http_worker_thread(int worker_id)
                     }
 
                     full_path = rectify_path(&full_path);
+                    std::cout << full_path << std::endl;
 
                     uint64_t requested_file_size; time_t requested_file_mdate; bool is_folder;
                     if(get_file_info(&full_path,&requested_file_size,&requested_file_mdate,&is_folder) == -1) // get file size and modification date
@@ -1971,7 +2040,7 @@ void http_worker_thread(int worker_id)
                         delete_http_connection(worker_id,triggered_connection,true);
                 }
 
-
+		#ifndef DISABLE_HTTPS
                 else if(triggered_connection[0]->state == HTTP_STATE_SSL_INIT)
                 {
                     int ssl_status = SSL_accept(triggered_connection[0]->ssl_connection);
@@ -1992,6 +2061,7 @@ void http_worker_thread(int worker_id)
 
                     triggered_connection[0]->state = HTTP_STATE_INIT;
                 }
+                #endif
 
 
             }
@@ -2051,6 +2121,7 @@ void http_worker_thread(int worker_id)
                 }
 
 
+		#ifndef DISABLE_HTTPS
                 else if (triggered_connection[0]->state == HTTP_STATE_SSL_INIT)
                 {
                     int ssl_status = SSL_accept(triggered_connection[0]->ssl_connection);
@@ -2071,6 +2142,7 @@ void http_worker_thread(int worker_id)
 
                     triggered_connection[0]->state = HTTP_STATE_INIT;
                 }
+                #endif
 
             }
 

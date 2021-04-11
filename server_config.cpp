@@ -17,6 +17,7 @@
 std::unordered_map<std::string , std::string > SERVER_CONFIGURATION;
 std::unordered_map<std::string , std::string > SERVER_HOSTNAMES;
 std::unordered_map<int , std::string > SERVER_ERROR_PAGES;
+std::string SERVER_DIRECTORY_LISTING_TEMPLATE;
 
 void parse_config_line(const std::string *config_line,std::unordered_map<std::string,std::string>* config_map)
 {
@@ -200,7 +201,7 @@ void load_server_error_pages()
 	if(!server_error_page_exists(500))
 	{
 		SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true);
-		SERVER_JOURNAL_WRITE(" No server error page for status 500 provided!",true);
+		SERVER_JOURNAL_WRITE(" No error page for status 500 is available!",true);
 		SERVER_JOURNAL_WRITE("\n\n",true);
 		exit(-1);
 	}
@@ -214,18 +215,7 @@ void load_hosts_list()
 	hosts_file_stream.open(SERVER_CONFIGURATION["host_list_file"].c_str(),std::ios::ate);
 	
 	if(!hosts_file_stream.is_open())
-	{
-		SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true);
-                SERVER_JOURNAL_WRITE(" Unable to open the hosts list file ",true);
-		SERVER_JOURNAL_WRITE(SERVER_CONFIGURATION["host_list_file"],true);
-		SERVER_JOURNAL_WRITE("\nError code: 0x",true);
-		SERVER_JOURNAL_WRITE(std::hex,true);
-		SERVER_JOURNAL_WRITE(errno,true);
-		SERVER_JOURNAL_WRITE("\n",true);
-		SERVER_JOURNAL_WRITE(strerror(errno),true);
-		SERVER_JOURNAL_WRITE("\n\n",true);
-		SERVER_JOURNAL_WRITE(std::dec,true);
-	}
+		SERVER_ERROR_JOURNAL_stdlib_err(3,"Unable to open the hosts list file ( ",SERVER_CONFIGURATION["host_list_file"].c_str()," )");
 
 	else
 	{
@@ -274,7 +264,6 @@ void load_hosts_list()
 	}
 	else
 	{
-
 		if(!http_host_exists(&SERVER_CONFIGURATION["default_host"]))
 		{
 			SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true);
@@ -283,11 +272,43 @@ void load_hosts_list()
 			SERVER_JOURNAL_WRITE(" does not match any defined hosts!\n\n",true);
 			exit(-1);
 		}
-
 	}
-
 }
 
+
+
+void load_directory_listing_template()
+{
+	std::ifstream dir_template_file_stream;
+	dir_template_file_stream.open(SERVER_CONFIGURATION["directory_listing_template"].c_str(),std::ios::ate|std::ios::binary);
+	
+	if(!dir_template_file_stream.is_open())
+	{
+		SERVER_ERROR_JOURNAL_stdlib_err(3,"Unable to open the directory listing html template ( ",SERVER_CONFIGURATION["directory_listing_template"].c_str()," )");
+		exit(-1);
+	}
+
+	
+	size_t template_size = dir_template_file_stream.tellg();
+	dir_template_file_stream.clear();
+	dir_template_file_stream.seekg(0, std::ios::beg);
+
+	if(template_size > 1024 * 10) // to be modified in future
+	{
+		SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true);
+		SERVER_JOURNAL_WRITE(" The the directory listing html template is too large!\nDirectory listing html template file size: ",true);
+		SERVER_JOURNAL_WRITE(template_size,true);
+		SERVER_JOURNAL_WRITE(" bytes",true);
+		SERVER_JOURNAL_WRITE("\n\n",true);
+		exit(-1);
+	}
+
+		
+	char buffer[10 * 1024];
+	dir_template_file_stream.read(buffer,template_size);
+
+	SERVER_DIRECTORY_LISTING_TEMPLATE = std::move(std::string(buffer,template_size));
+}
 
 
 
@@ -306,16 +327,7 @@ void load_server_config(char* config_file)
 		
 		if(!config_file_stream.is_open())
 		{
-			SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true);
-			SERVER_JOURNAL_WRITE(" Unable to open configuration file ",true);
-			SERVER_JOURNAL_WRITE(config_file,true);
-			SERVER_JOURNAL_WRITE("\nError code: 0x",true);
-			SERVER_JOURNAL_WRITE(std::hex,true);
-			SERVER_JOURNAL_WRITE(errno,true);
-			SERVER_JOURNAL_WRITE("\n",true);
-			SERVER_JOURNAL_WRITE(strerror(errno),true);
-			SERVER_JOURNAL_WRITE("\n\n",true);
-			SERVER_JOURNAL_WRITE(std::dec,true);
+			SERVER_ERROR_JOURNAL_stdlib_err(3,"Unable to open configuration file ( ",config_file," )");
 			exit(-1);
 		}
 
@@ -327,7 +339,8 @@ void load_server_config(char* config_file)
 		{
 			SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true);
 			SERVER_JOURNAL_WRITE(" The configuration file is too large!\nConfiguration file size: ",true);
-			SERVER_JOURNAL_WRITE(config_file_size,true); SERVER_JOURNAL_WRITE(" bytes",true);
+			SERVER_JOURNAL_WRITE(config_file_size,true); 
+			SERVER_JOURNAL_WRITE(" bytes",true);
 			SERVER_JOURNAL_WRITE("\n\n",true);
 			exit(-1);
 		}
@@ -362,8 +375,8 @@ void load_server_config(char* config_file)
 
 
 
-	//sanity check 
 
+	//sanity check 
  		
 	std::vector<unsigned int> allowed_ip_version = {4,6};
 	check_server_config_uintval("ip_version",DEFAULT_CONFIG_SERVER_IP_VERSION,0,0,&allowed_ip_version);
@@ -412,16 +425,7 @@ void load_server_config(char* config_file)
 
 		else if(r == -1)
 		{
-			SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true); 
-			SERVER_JOURNAL_WRITE(" Unable to test ip address ",true);
-			SERVER_JOURNAL_WRITE(SERVER_CONFIGURATION["ip_addr"],true);
-			SERVER_JOURNAL_WRITE("\nError code: 0x",true);
-			SERVER_JOURNAL_WRITE(std::hex,true);
-			SERVER_JOURNAL_WRITE(errno,true);
-			SERVER_JOURNAL_WRITE("\n",true);
-			SERVER_JOURNAL_WRITE(strerror(errno),true);
-			SERVER_JOURNAL_WRITE("\n\n",true);
-			SERVER_JOURNAL_WRITE(std::dec,true);
+			SERVER_ERROR_JOURNAL_stdlib_err(2,"Unable to test ip address ",SERVER_CONFIGURATION["ip_addr"].c_str());
 			exit(-1);
 		}
 
@@ -441,6 +445,11 @@ void load_server_config(char* config_file)
 
 	if(is_server_config_variable_true("enable_https"))
 	{
+		#ifdef DISABLE_HTTPS
+		SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true); 
+		SERVER_JOURNAL_WRITE(" HTTPS is enabled but the HTTPS support module is not compiled!\n\n",true);
+		#else
+		
 		check_server_config_uintval("listen_https_port",DEFAULT_CONFIG_SERVER_HTTPS_PORT,1,65534);
 
 		if(!server_config_variable_exists("ssl_cert_file"))
@@ -456,6 +465,7 @@ void load_server_config(char* config_file)
 			SERVER_JOURNAL_WRITE(" HTTPS is enabled but no private key file is provided!\n\n",true);
 			exit(-1);
 		}
+		#endif
 
 	}	
 
@@ -485,8 +495,19 @@ void load_server_config(char* config_file)
 		SERVER_JOURNAL_WRITE("\n\n");
 	}
 
-
 	load_server_error_pages();
+	
+	
+	if(!server_config_variable_exists("directory_listing_template"))
+	{
+		SERVER_CONFIGURATION["directory_listing_template"] = DEFAULT_CONFIG_SERVER_DIR_LISTING_TEMPLATE;
+		SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING)); 
+		SERVER_JOURNAL_WRITE(" No server directory listing template specified!\nLoading default: ");
+		SERVER_JOURNAL_WRITE(SERVER_CONFIGURATION["directory_listing_template"]);
+		SERVER_JOURNAL_WRITE("\n\n");
+	}
+	
+	load_directory_listing_template();
 
 
 

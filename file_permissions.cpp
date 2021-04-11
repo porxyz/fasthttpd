@@ -28,7 +28,7 @@ inline bool access_descriptor_exists(const std::string* path)
 	access_descriptors_mutex.lock();
 	
 	if(access_descriptor_list.find(path[0]) != access_descriptor_list.end())
-		found=true;
+		found = true;
 	
 	access_descriptors_mutex.unlock();
 

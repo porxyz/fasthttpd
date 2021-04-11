@@ -30,9 +30,11 @@
 
 #define DEFAULT_CONFIG_SERVER_ERROR_PAGE_FOLDER "error_pages"
 
-#define DEFAULT_CONFIG_SERVER_HOSTLIST_FILE "host.conf"
+#define DEFAULT_CONFIG_SERVER_HOSTLIST_FILE "config/host_list.conf"
 #define DEFAULT_CONFIG_SERVER_HOSTNAME "localhost"
 #define DEFAULT_CONFIG_SERVER_HOSTNAME_PATH "www"
+
+#define DEFAULT_CONFIG_SERVER_DIR_LISTING_TEMPLATE "config/directory_listing_template.html"
 
 
 #ifndef NO_MOD_MYSQL
@@ -46,6 +48,7 @@
 extern std::unordered_map<std::string , std::string > SERVER_CONFIGURATION;
 extern std::unordered_map<std::string , std::string > SERVER_HOSTNAMES;
 extern std::unordered_map<int , std::string > SERVER_ERROR_PAGES;
+extern std::string SERVER_DIRECTORY_LISTING_TEMPLATE;
 
 void load_server_config(char* config_file = NULL);
 

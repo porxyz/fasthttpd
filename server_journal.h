@@ -28,7 +28,12 @@ template<typename T> static inline void SERVER_JOURNAL_WRITE(T msg,bool is_error
 
 
 void SERVER_ERROR_JOURNAL_stdlib_err(const char* s);
+void SERVER_ERROR_JOURNAL_stdlib_err(int n, ...);
+
+#ifndef DISABLE_HTTPS
 void SERVER_ERROR_JOURNAL_openssl_err(const char* s);
+#endif
+
 void SERVER_ERROR_JOURNAL_conn_exceeded();
 
 

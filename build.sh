@@ -3,15 +3,28 @@
 error_reporting(E_ERROR | E_WARNING);
 
 $enable_MOD_MYSQL = true;
+$enable_https = true;
+$debug = false;
 
 $COMPILER = "g++";
-$COMPILER_FLAGS = "-rdynamic -ggdb -Wall -Wfatal-errors -O3";
-$LLIBS = "-lpthread -lssl -lcrypto";
+$COMPILER_FLAGS = "-rdynamic -std=c++11 -Wall -Wfatal-errors";
+$LLIBS = "-lpthread";
 
 
-if($enable_MOD_MYSQL)
-	$LLIBS.=" -lmysqlclient";
+if($debug)
+	$COMPILER_FLAGS .= " -ggdb";
+else
+	$COMPILER_FLAGS .= " -O3";
+
+
+if($enable_https)
+	$LLIBS.=" -lssl -lcrypto";
+else
+	$COMPILER_FLAGS.=" -DDISABLE_HTTPS";
 	
+	
+if($enable_MOD_MYSQL)
+	$LLIBS.=" -lmysqlclient";	
 else
 	$COMPILER_FLAGS.=" -DNO_MOD_MYSQL";
 
@@ -126,9 +139,21 @@ if(count($argv) === 1 or strcasecmp($argv[1],"build") === 0)
 		if(strcasecmp($argv[2],"http_worker") === 0)
 			exit();
 	}
+	
+	//compile server listener API
+	if(source_code_modified(array("../server_listener.h","../server_listener.cpp"),"server_listener.o") or strcasecmp($argv[2],"server_listener") === 0)
+	{
+		echo("Building server listener API\n");
+		system(($COMPILER . " -c ../server_listener.cpp " . $COMPILER_FLAGS),$compiler_return_value);
+		if($compiler_return_value != 0)
+			die("Can not compile server listener API\n");
+			
+		if(strcasecmp($argv[2],"server_listener") === 0)
+			exit();
+	}
 
 	//compile https listener thread
-	if(source_code_modified(array("../https_listener.h","../https_listener.cpp"),"https_listener.o") or strcasecmp($argv[2],"https_listener") === 0)
+	if((source_code_modified(array("../https_listener.h","../https_listener.cpp"),"https_listener.o") or strcasecmp($argv[2],"https_listener") === 0) and $enable_https)
 	{
 		echo("Building https listener thread\n");
 		system(($COMPILER . " -c ../https_listener.cpp " . $COMPILER_FLAGS),$compiler_return_value);
@@ -138,6 +163,8 @@ if(count($argv) === 1 or strcasecmp($argv[1],"build") === 0)
 		if(strcasecmp($argv[2],"https_listener") === 0)
 			exit();
 	}
+	
+	
 
 	//compile MYSQL support module
 	if((source_code_modified(array("../mod_mysql.h","../mod_mysql.cpp"),"mod_mysql.o") or strcasecmp($argv[2],"mod_mysql") === 0) and $enable_MOD_MYSQL)
@@ -202,12 +229,12 @@ while (false !== ($filename = readdir($h_folder)))
 closedir($h_folder);
 
 
-if(source_code_modified($all_objects,"server.bin") or strcasecmp($argv[1],"link") === 0)
+if(source_code_modified($all_objects,"fasthttpd") or strcasecmp($argv[1],"link") === 0)
 {
-	echo("Linking all objects into server.bin\n");
-	system(($COMPILER . " -o server.bin *.o " . $LLIBS . " " . $COMPILER_FLAGS),$compiler_return_value);
+	echo("Linking all objects into fasthttpd\n");
+	system(($COMPILER . " -o fasthttpd *.o " . $LLIBS . " " . $COMPILER_FLAGS),$compiler_return_value);
 	if($compiler_return_value != 0)
-		die("Can not link server.bin\n");
+		die("Can not link fasthttpd\n");
 }
 
 

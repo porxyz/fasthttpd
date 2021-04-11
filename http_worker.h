@@ -37,7 +37,10 @@
 #include <atomic> 
 #include <vector> 
 #include <time.h>
+
+#ifndef DISABLE_HTTPS
 #include <openssl/ssl.h>
+#endif
 
 #ifndef NO_MOD_MYSQL
 #include "mod_mysql.h"
@@ -90,7 +93,11 @@ struct http_connection
 	int ip_addr_version;
 	int http_version;
 	bool https;
+
+	#ifndef DISABLE_HTTPS
 	SSL* ssl_connection;
+	#endif
+
 	struct timespec last_action;
 	int milisecond_timeout;
 	std::list<struct http_connection>::iterator self_reference;
@@ -103,6 +110,7 @@ struct http_worker_node
 	std::list<struct http_connection> connections;
 	std::mutex* connections_mutex;
 	int worker_epoll;
+
 	#ifndef NO_MOD_MYSQL
 	mysql_connection* mysql_db_handle;
 	#endif
@@ -113,8 +121,11 @@ struct http_worker_node
 extern std::atomic<size_t> total_http_connections;
 extern std::vector<struct http_worker_node> http_workers;
 
-void worker_add_client(int new_client,const char* remote_addr,std::string* server_addr,int16_t remote_port,int16_t server_port,
-int ip_addr_version,bool https = false,SSL_CTX* openssl_ctx = NULL);
+void worker_add_client(int new_client,const char* remote_addr,std::string* server_addr,int16_t remote_port,int16_t server_port,int ip_addr_version,bool https = false
+			#ifndef DISABLE_HTTPS
+			, SSL_CTX* openssl_ctx = NULL
+			#endif
+			);
 
 void init_workers(int close_trigger);
 
@@ -155,6 +166,7 @@ void init_worker_aux_modules(int worker_id);
 void free_worker_aux_modules(int worker_id);
 
 #endif
+
 
 
 

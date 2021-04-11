@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <ctime>
+#include <cstdint>
 
 unsigned int str2uint(const std::string *str,bool *invalid_chars = NULL);
 int check_ip_addr(const std::string *addr,int addr_type);

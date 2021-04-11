@@ -2,12 +2,14 @@
 #include <fstream>
 #include <ctime>
 #include <mutex>
+#include <cstring>
+#include <cstdarg>
 #include <errno.h>
-#include <string.h>
 
 
+#ifndef DISABLE_HTTPS
 #include <openssl/err.h>
-
+#endif
 
 #include "server_journal.h"
 #include "helper_functions.h"
@@ -44,16 +46,7 @@ void SERVER_JOURNAL_INIT(const char* info_file,const char* error_file)
 		info_file_stream.open(info_file);
 		if(!info_file_stream.is_open())
 		{
-			SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true);
-			SERVER_JOURNAL_WRITE(" Unable to open log file (",true);
-			SERVER_JOURNAL_WRITE(info_file,true);
-			SERVER_JOURNAL_WRITE(" )\nError code: 0x",true);
-			SERVER_JOURNAL_WRITE(std::hex,true);
-			SERVER_JOURNAL_WRITE(errno,true);
-			SERVER_JOURNAL_WRITE("\n",true);
-			SERVER_JOURNAL_WRITE(strerror(errno),true);
-			SERVER_JOURNAL_WRITE(std::dec,true);
-			SERVER_JOURNAL_WRITE("\n\n",true);
+			SERVER_ERROR_JOURNAL_stdlib_err(3,"Unable to open log file ( ",info_file,")");
 			info_file_stream.close();
 		}
 		else
@@ -68,14 +61,6 @@ inline size_t get_formated_time(time_t* t,char* buff,size_t buff_size,bool local
 	return strftime(buff,buff_size,"[%Y-%m-%d %H:%M:%S]",(local ? localtime(t) : gmtime(t)));
 }
 
-
-
-static int get_openssl_error_callback(const char *str,size_t,void*)
-{
-	SERVER_JOURNAL_WRITE(str,true);
-	SERVER_JOURNAL_WRITE("\n",true);
-	return 0;
-}
 
 
 std::string journal_strtime(bool local)
@@ -107,6 +92,42 @@ void SERVER_ERROR_JOURNAL_stdlib_err(const char* s)
           SERVER_JOURNAL_WRITE_ERROR.unlock();
 }
 
+void SERVER_ERROR_JOURNAL_stdlib_err(int n, ...)
+{
+	  if(SERVER_JOURNAL_DISABLED)
+	  	return;
+	  	
+	  SERVER_JOURNAL_WRITE_ERROR.lock();
+          SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true);
+          SERVER_JOURNAL_WRITE(" ",true);
+	  
+	  va_list arg_list;
+  	  va_start(arg_list,n);
+  	  for (int i=0; i<n; i++)
+	  {
+		SERVER_JOURNAL_WRITE(va_arg(arg_list,const char*),true);
+  	  }
+  	  va_end(arg_list);
+  
+	  SERVER_JOURNAL_WRITE("\nError code: 0x",true);
+          SERVER_JOURNAL_WRITE(std::hex,true);
+          SERVER_JOURNAL_WRITE(errno,true);
+          SERVER_JOURNAL_WRITE("\n",true);
+          SERVER_JOURNAL_WRITE(strerror(errno),true);
+          SERVER_JOURNAL_WRITE("\n\n",true);
+	  SERVER_JOURNAL_WRITE(std::dec,true);
+          SERVER_JOURNAL_WRITE_ERROR.unlock();
+}
+
+#ifndef DISABLE_HTTPS
+static int get_openssl_error_callback(const char *str,size_t,void*)
+{
+	SERVER_JOURNAL_WRITE(str,true);
+	SERVER_JOURNAL_WRITE("\n",true);
+	return 0;
+}
+
+
 void SERVER_ERROR_JOURNAL_openssl_err(const char* s)
 {
 	 if(SERVER_JOURNAL_DISABLED)
@@ -121,6 +142,7 @@ void SERVER_ERROR_JOURNAL_openssl_err(const char* s)
 	SERVER_JOURNAL_WRITE("--OpenSSL errors end--\n\n",true);
 	SERVER_JOURNAL_WRITE_ERROR.unlock();
 }
+#endif
 
 void SERVER_ERROR_JOURNAL_conn_exceeded()
 {
