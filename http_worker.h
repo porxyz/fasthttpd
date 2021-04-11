@@ -139,7 +139,7 @@ bool parse_http_URI(const std::string* raw_request,std::string* URI,std::unorder
 
 bool parse_http_request_headers(const std::string* raw_request,std::unordered_map<std::string , std::string>* request_headers);
 
-bool decode_http_content_range(const std::string* content_range,size_t* offset_start,size_t* offset_stop);
+bool decode_http_content_range(const std::string* content_range,ssize_t* offset_start,ssize_t* offset_stop);
 
 bool parse_http_request_POST_body(std::list<struct http_connection>::iterator* current_connection,uint8_t parse_type);
 

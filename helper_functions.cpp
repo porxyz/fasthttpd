@@ -509,8 +509,8 @@ bool url_decode(const std::string* s,std::string* result)
 
 std::string rectify_path(const std::string* path)
 {
-    if(!path)
-        return std::string();
+	if(!path)
+        	return std::string();
         
 	std::string result;
 	std::vector<std::string> path_tree, rectified_path_tree;
