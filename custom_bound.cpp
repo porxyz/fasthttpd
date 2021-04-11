@@ -77,15 +77,6 @@ void run_custom_page_generator(std::list<struct http_connection>::iterator* curr
 {
 	if(generator->execute_only_when_loaded)
 	{
-	
-		// perform checking if the request is fully loaded
-		if(current_connection[0]->request.request_method == HTTP_METHOD_POST && !is_POST_request_complete(current_connection))
-		{
-				current_connection[0]->state = HTTP_STATE_INIT;
-				std::cout << "post request not complete\n\n";
-				return;
-		}
-
 		current_connection[0]->recv_buffer.clear();
 		generator->page_generator(current_connection[0],worker_id);
 		current_connection[0]->response.response_headers["Content-Length"] = int2str(current_connection[0]->response.response_body.size());
