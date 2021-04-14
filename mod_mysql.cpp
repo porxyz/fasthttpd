@@ -119,7 +119,7 @@ bool mysql_connection::get_database(std::string* output)
 		return false;
 	
 	
-	output[0] = std::move(std::string(buffer,data_len));
+	output[0] = std::string(buffer,data_len);
 	
 	return true;
 }

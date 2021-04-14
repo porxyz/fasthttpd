@@ -7,12 +7,12 @@ $enable_https = true;
 $debug = false;
 
 $COMPILER = "g++";
-$COMPILER_FLAGS = "-rdynamic -std=c++11 -Wall -Wfatal-errors";
+$COMPILER_FLAGS = "-std=c++11 -Wall -Wfatal-errors";
 $LLIBS = "-lpthread";
 
 
 if($debug)
-	$COMPILER_FLAGS .= " -ggdb";
+	$COMPILER_FLAGS .= " -ggdb -rdynamic";
 else
 	$COMPILER_FLAGS .= " -O3";
 

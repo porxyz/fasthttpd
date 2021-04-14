@@ -2,7 +2,7 @@
 clear
 
 #start server
-#valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --log-file="valgrind_dump.txt" ./build/fasthttpd main.conf
+#valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes -s --log-file="valgrind_dump.txt" ./build/fasthttpd main.conf
 ./build/fasthttpd main.conf
 
 if [ $? -ne 0 ] ; then

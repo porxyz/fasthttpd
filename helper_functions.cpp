@@ -13,9 +13,9 @@
 
 
 
-unsigned int str2uint(const std::string *str,bool *invalid_chars)
+uint64_t str2uint(const std::string *str,bool *invalid_chars)
 {
-	unsigned int result=0;
+	uint64_t result=0;
 	
 	for(size_t i=0; i<str->size(); i++)
 	{
@@ -58,7 +58,7 @@ int set_socket_nonblock(int sock)
 	return fcntl(sock, F_SETFL, flags);
 }
 
-std::string int2str(int n,uint8_t base)
+std::string int2str(int64_t n,uint8_t base)
 {
 	const char* base_charset="0123456789abcdef";
 	
@@ -73,9 +73,9 @@ std::string int2str(int n,uint8_t base)
 		sign = true;
 	}
 
-	char buffer[40];
-	buffer[39] = 0;
-	char* current_symbol_p = buffer + 38;
+	char buffer[70];
+	buffer[69] = 0;
+	char* current_symbol_p = buffer + 68;
     
 	while(n)
 	{
@@ -507,53 +507,135 @@ bool url_decode(const std::string* s,std::string* result)
 }
 
 
+/*
+This function rewrites a path: "/foo/../bar/./" => "/bar"
+The function is also fault tolerant: "/foo///bar//" => "/foo/bar"
+You should not go above top directory: "/foo/../../.." => "/"
+If a path start with "/" the rectified path should do the same
+*/
+std::string rectify_path(const char* path)
+{
+    if (!path)
+        return std::string();
+
+    // working buffers
+    // the recitified path is smaller or equal to the original one
+    // one octet is added for the leading path separator
+
+    int path_len = strlen(path);
+    char* path_buffer = new char[path_len + 1];
+    char* current_path_node = new char[path_len];
+
+    // initially we have empty strings
+    int path_end_offset = 0;
+    int node_end_offset = 0;
+
+    for (int i = 0; i < path_len; i++)
+    {
+        if (path[i] == '/')
+        {
+            if (node_end_offset == 2 and current_path_node[0] == '.' and current_path_node[1] == '.')
+            { 
+                // we go to the parent node
+                if (path_end_offset != 0)
+                {
+                    if (path_buffer[path_end_offset] == '/')
+                            path_end_offset--;
+                    
+                    for (; path_end_offset >= 0; path_end_offset--)
+                    {
+                        if (path_buffer[path_end_offset] == '/')
+                            break;
+                    }
+                }
+            }
+
+            else if (node_end_offset == 1 and current_path_node[0] == '.')
+                node_end_offset = 0;
+
+            // append the node only if the node is not empty
+            else if (node_end_offset)
+            {
+                path_buffer[path_end_offset] = '/';
+                path_end_offset++;
+
+                memcpy(path_buffer + path_end_offset, current_path_node, node_end_offset);
+                path_end_offset += node_end_offset;
+            }
+
+            node_end_offset = 0;
+        }
+        else
+        {
+            current_path_node[node_end_offset] = path[i];
+            node_end_offset++;
+        }
+    }
+
+    // perform the check for the last node_end_offset
+    if (node_end_offset == 2 and current_path_node[0] == '.' and current_path_node[1] == '.')
+    {
+        if (path_end_offset != 0)
+        {
+            if (path_buffer[path_end_offset] == '/')
+                            path_end_offset--;
+            
+            for (; path_end_offset >= 0; path_end_offset--)
+            {
+                if (path_buffer[path_end_offset] == '/')
+                    break;
+            }
+        }
+    }
+
+    else if (node_end_offset == 1 and current_path_node[0] == '.')
+        node_end_offset = 0;
+
+    else if (node_end_offset)
+    {
+        path_buffer[path_end_offset] = '/';
+        path_end_offset++;
+
+        memcpy(path_buffer + path_end_offset, current_path_node, node_end_offset);
+        path_end_offset += node_end_offset;
+    }
+
+
+    std::string result;
+    
+    // if the input path start without "/"
+    if (path[0] != '/' and path_end_offset)
+    {
+    	result = std::string(path_buffer + 1, path_end_offset - 1);
+    	
+    	delete[] path_buffer;
+    	delete[] current_path_node;
+    	
+        return result;
+    }
+
+    else if (!path_end_offset and path[0] == '/')
+    {
+        path_buffer[path_end_offset] = '/';
+        path_end_offset++;
+    }
+
+    result = std::string(path_buffer, path_end_offset);
+    	
+    delete[] path_buffer;
+    delete[] current_path_node;
+    	
+    return result;
+}
+
+
+
 std::string rectify_path(const std::string* path)
 {
 	if(!path)
-        	return std::string();
-        
-	std::string result;
-	std::vector<std::string> path_tree, rectified_path_tree;
-	explode(path,"/",&path_tree);
-
-
-	for(size_t i=0; i < path_tree.size(); i++)
-	{
-		if(path_tree[i] == "." or path_tree[i].empty())
-			continue;
-			
-		else if(path_tree[i] == "..")
-		{
-			if(!rectified_path_tree.empty())
-				rectified_path_tree.pop_back();
-			else
-				continue;
-		}
-				
-		else
-			rectified_path_tree.push_back(path_tree[i]);
+		return std::string();
 		
-	}
-	
-	path_tree.clear();
-	
-	
-
-	    
-	if(path[0][0] == '/' && !rectified_path_tree.empty())
-	    rectified_path_tree[0].insert(0,1,'/');
-	
-	
-	for(size_t i=0; i < rectified_path_tree.size(); i++)
-	{
-		if(i != 0)
-			result.append("/");
-		
-		result.append(rectified_path_tree[i]);
-	}
-
-
-	return result;
+	return rectify_path(path->c_str());
 }
 
 

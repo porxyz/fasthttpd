@@ -192,7 +192,7 @@ void load_server_error_pages()
 		error_page_stream.read(read_buffer,bytes_to_read);
 		error_page_stream.close();
 
-		SERVER_ERROR_PAGES[error_page_codes[i - 1]] = std::move(std::string(read_buffer,bytes_to_read));
+		SERVER_ERROR_PAGES[error_page_codes[i - 1]] = std::string(read_buffer,bytes_to_read);
 
 		str_replace_first(&SERVER_ERROR_PAGES[error_page_codes[i - 1]],"$SERVERNAME",&SERVER_CONFIGURATION["server_name"]);
 		str_replace_first(&SERVER_ERROR_PAGES[error_page_codes[i - 1]],"$SERVERVERSION",DEFAULT_CONFIG_SERVER_VERSION);
@@ -307,7 +307,7 @@ void load_directory_listing_template()
 	char buffer[10 * 1024];
 	dir_template_file_stream.read(buffer,template_size);
 
-	SERVER_DIRECTORY_LISTING_TEMPLATE = std::move(std::string(buffer,template_size));
+	SERVER_DIRECTORY_LISTING_TEMPLATE = std::string(buffer,template_size);
 }
 
 
@@ -395,11 +395,11 @@ void load_server_config(char* config_file)
 	
 	check_server_config_uintval("request_timeout",DEFAULT_CONFIG_SERVER_REQ_TIMEOUT,0,600);
 	
-	check_server_config_uintval("read_buffer_size",DEFAULT_CONFIG_SERVER_READ_BUFFER_SIZE,1024,1 << 28);
+	check_server_config_uintval("read_buffer_size",DEFAULT_CONFIG_SERVER_READ_BUFFER_SIZE,1,uint64_t(1) << 34);
 
 	check_server_config_uintval("server_workers",DEFAULT_CONFIG_SERVER_WORKERS,1,1 << 14);
 	
-	check_server_config_uintval("max_request_size",DEFAULT_CONFIG_SERVER_MAX_REQ_SIZE,1024,uint64_t(1) << 34);
+	check_server_config_uintval("max_request_size",DEFAULT_CONFIG_SERVER_MAX_REQ_SIZE,4,uint64_t(1) << 34);
 
 
 
@@ -429,6 +429,40 @@ void load_server_config(char* config_file)
 			exit(-1);
 		}
 
+	}
+
+
+	bool is_bad_num;
+	if(server_config_variable_exists("recv_kernel_buffer_size"))
+	{
+		unsigned int kernel_buffer_size = str2uint(&SERVER_CONFIGURATION["recv_kernel_buffer_size"],&is_bad_num);
+
+		if(is_bad_num or kernel_buffer_size < 1)
+		{
+			SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true); 
+			SERVER_JOURNAL_WRITE(" Invalid value specified for recv_kernel_buffer_size!\n",true);
+			SERVER_JOURNAL_WRITE("Ignoring this rule!\n",true);
+			SERVER_JOURNAL_WRITE("Please consult the server manual for more information!",true);
+			SERVER_JOURNAL_WRITE("\n\n",true);
+			
+			SERVER_CONFIGURATION.erase("recv_kernel_buffer_size");
+		}
+	}
+	
+	if(server_config_variable_exists("send_kernel_buffer_size"))
+	{
+		unsigned int kernel_buffer_size = str2uint(&SERVER_CONFIGURATION["send_kernel_buffer_size"],&is_bad_num);
+
+		if(is_bad_num or kernel_buffer_size < 1)
+		{
+			SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true); 
+			SERVER_JOURNAL_WRITE(" Invalid value specified for send_kernel_buffer_size!\n",true);
+			SERVER_JOURNAL_WRITE("Ignoring this rule!\n",true);
+			SERVER_JOURNAL_WRITE("Please consult the server manual for more information!",true);
+			SERVER_JOURNAL_WRITE("\n\n",true);
+			
+			SERVER_CONFIGURATION.erase("send_kernel_buffer_size");
+		}
 	}
 
 
@@ -547,7 +581,7 @@ void load_server_config(char* config_file)
 			SERVER_JOURNAL_WRITE("\n\n");
 		}
 
-		bool is_bad_num;
+
 		if(server_config_variable_exists("mysql_port"))
 		{
 			unsigned int mysql_port = str2uint(&SERVER_CONFIGURATION["mysql_port"],&is_bad_num);

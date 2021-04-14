@@ -120,6 +120,8 @@ int init_server_listener_epoll(int listener_socket,int close_trigger)
 
 
 	struct epoll_event epoll_config;
+	memset(&epoll_config,0,sizeof(epoll_config)); //to suppress valgrind warnings
+	
 	epoll_config.events = EPOLLIN | EPOLLET;
 	epoll_config.data.fd = listener_socket;
 
@@ -163,7 +165,33 @@ int run_server_listener_loop(int server_epoll, int http_listener,bool https
 		http_listener_port = str2uint(&SERVER_CONFIGURATION["listen_http_port"]);
 
 
+
+	/*
+	support different kernel buffer dimensions
+	useful for reducing kernel memory if you work with small requests
+	useful if you want larger TCP window
+	*/
+	bool resize_recv_kernel_buffer = false;
+	bool resize_send_kernel_buffer = false;
+	socklen_t  recv_kernel_buffer_size;
+	socklen_t  send_kernel_buffer_size;
+	
+	if(server_config_variable_exists("recv_kernel_buffer_size"))
+	{
+		recv_kernel_buffer_size = 1024 * str2uint(&SERVER_CONFIGURATION["recv_kernel_buffer_size"],NULL);
+		resize_recv_kernel_buffer = true;
+	}
+	
+	if(server_config_variable_exists("send_kernel_buffer_size"))
+	{
+		send_kernel_buffer_size = 1024 * str2uint(&SERVER_CONFIGURATION["send_kernel_buffer_size"],NULL);
+		resize_send_kernel_buffer = true;
+	}
+	
+
 	struct epoll_event triggered_event;
+	memset(&triggered_event,0,sizeof(struct epoll_event)); //to suppress valgrind warnings
+	
 	while(true)
 	{
 		int epoll_result = epoll_wait(server_epoll,&triggered_event,1,-1);
@@ -230,6 +258,21 @@ int run_server_listener_loop(int server_epoll, int http_listener,bool https
 
 
 						incoming_port=ntohs(((incoming_addr.sa_family == AF_INET6) ? incoming_addr6->sin6_port : incoming_addr4->sin_port));
+						
+						if(resize_recv_kernel_buffer)
+						{
+							if(setsockopt(new_http_client,SOL_SOCKET, SO_RCVBUF, &recv_kernel_buffer_size, sizeof(socklen_t)) == -1)
+								SERVER_ERROR_JOURNAL_stdlib_err("Unable to adjust client socket SO_RCVBUF!");
+							
+						}
+						
+						if(resize_send_kernel_buffer)
+						{
+							if(setsockopt(new_http_client,SOL_SOCKET, SO_SNDBUF, &send_kernel_buffer_size, sizeof(socklen_t)) == -1)
+								SERVER_ERROR_JOURNAL_stdlib_err("Unable to adjust client socket SO_SNDBUF!");
+							
+						}
+						
 
 						worker_add_client(new_http_client,incoming_addr_str,&SERVER_CONFIGURATION["ip_addr"],incoming_port,http_listener_port,incoming_addr.sa_family,https
 								  #ifndef DISABLE_HTTPS

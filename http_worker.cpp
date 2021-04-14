@@ -62,7 +62,7 @@ bool recv_all(std::list<struct http_connection>::iterator* current_connection,ch
                         return true;
                 }
 
-                current_connection[0]->recv_buffer.append(buff,recv_len); //std::cout << std::string(buff,recv_len) << std::endl;
+                current_connection[0]->recv_buffer.append(buff,recv_len);
                 goto sock_read_proc;
         }
 
@@ -238,7 +238,7 @@ int detect_http_version(const std::string* raw_request)
                 return HTTP_VERSION_UNDEFINED;
 
 
-        std::string version = std::move(raw_request->substr(last_space_separator+1,8));
+        std::string version = raw_request->substr(last_space_separator+1,8);
 
         if(version == "HTTP/1.1")
                 return HTTP_VERSION_1_1;
@@ -262,7 +262,7 @@ int detect_http_method(const std::string* raw_request)
                 return HTTP_METHOD_UNDEFINED;
 
 
-        std::string method = std::move(raw_request->substr(0,space_separator));
+        std::string method = raw_request->substr(0,space_separator);
 
         if(method == std::string("GET"))
                 return HTTP_METHOD_GET;
@@ -392,11 +392,11 @@ bool parse_http_URI(const std::string* raw_request,std::string* URI,std::unorder
         size_t query_mark = raw_request->find('?',first_space_separator);
         if(query_mark == std::string::npos or query_mark > second_space_separator)
         {
-                raw_URI = std::move(raw_request->substr(first_space_separator+1,(second_space_separator-first_space_separator) - 1));
+                raw_URI = raw_request->substr(first_space_separator+1,(second_space_separator-first_space_separator) - 1);
                 return url_decode(&raw_URI,URI);
         }
 
-        raw_URI = std::move(raw_request->substr(first_space_separator+1,(query_mark-first_space_separator) - 1));
+        raw_URI = raw_request->substr(first_space_separator+1,(query_mark-first_space_separator) - 1);
         if(!url_decode(&raw_URI,URI))
             return false;
 
@@ -658,7 +658,7 @@ bool parse_multipart_form_data(const std::string* raw_request,const std::string*
                         return false;
 
 
-                std::string field_name = std::move(raw_request->substr(cd_header_start,name_end - cd_header_start));
+                std::string field_name = raw_request->substr(cd_header_start,name_end - cd_header_start);
 
 
                 size_t new_line = raw_request->find((use_standard_newline ? "\r\n" : "\n" ),name_end);
@@ -682,7 +682,7 @@ bool parse_multipart_form_data(const std::string* raw_request,const std::string*
                         if(filename_end == std::string::npos or filename_end > new_line) //bad syntax
                                 return false;
 
-                        filename = std::move(raw_request->substr(filename_start,filename_end-filename_start));
+                        filename = raw_request->substr(filename_start,filename_end-filename_start);
 
                         is_file = true;
                 }
@@ -708,7 +708,7 @@ bool parse_multipart_form_data(const std::string* raw_request,const std::string*
                 multipart_content_start += (use_standard_newline ? 4 : 2);
 
 
-                std::string multipart_content = std::move(raw_request->substr(multipart_content_start,(cd_header_start - multipart_content_start) - (use_standard_newline ? 2 : 1)) );
+                std::string multipart_content = raw_request->substr(multipart_content_start,(cd_header_start - multipart_content_start) - (use_standard_newline ? 2 : 1));
 
 
                 if(is_file)
@@ -739,7 +739,7 @@ bool parse_multipart_form_data(const std::string* raw_request,const std::string*
                                 if(new_line == std::string::npos or new_line > multipart_content_start) // bad syntax
                                         return false;
 
-                                content_type = std::move(raw_request->substr(content_type_pos, new_line-content_type_pos));
+                                content_type = raw_request->substr(content_type_pos, new_line-content_type_pos);
                         }
 
 
@@ -825,7 +825,7 @@ bool check_request_length(std::list<struct http_connection>::iterator* triggered
     }
 
     bool invalid_number;
-    size_t content_length_val = str2uint(&content_length_iter->second,&invalid_number);
+    uint64_t content_length_val = str2uint(&content_length_iter->second,&invalid_number);
 
     if(invalid_number)
     {
@@ -871,7 +871,7 @@ bool check_request_length(std::list<struct http_connection>::iterator* triggered
         }
     }
 
-    size_t total_size = body_start_position + (use_standard_newline ? 4 : 2) + content_length_val;
+    uint64_t total_size = body_start_position + (use_standard_newline ? 4 : 2) + content_length_val;
     if(total_size > max_request_len)
     {
         SERVER_JOURNAL_WRITE_ERROR.lock();
@@ -917,7 +917,7 @@ bool is_POST_request_complete(std::list<struct http_connection>::iterator* trigg
 
 
     bool is_bad_num;
-    size_t post_body_size = str2uint(&content_length_iter->second,&is_bad_num);
+    uint64_t post_body_size = str2uint(&content_length_iter->second,&is_bad_num);
 
     if(is_bad_num)
         return false;
@@ -942,7 +942,7 @@ bool is_POST_request_complete(std::list<struct http_connection>::iterator* trigg
 }
 
 
-bool decode_http_content_range(const std::string* content_range,ssize_t* offset_start,ssize_t* offset_stop)
+bool decode_http_content_range(const std::string* content_range,int64_t* offset_start,int64_t* offset_stop)
 {
         std::vector <std::string> content_range_el;
         explode(content_range,"=",&content_range_el);
@@ -958,7 +958,7 @@ bool decode_http_content_range(const std::string* content_range,ssize_t* offset_
 
 
         bool is_invalid;
-        offset_start[0] = str2uint(&content_range_data[0],&is_invalid);
+        offset_start[0] = (int64_t)str2uint(&content_range_data[0],&is_invalid);
 
         if(is_invalid)
                 return false;
@@ -970,7 +970,7 @@ bool decode_http_content_range(const std::string* content_range,ssize_t* offset_
 	
 	else
 	{	
-        	offset_stop[0] = str2uint(&content_range_data[1],&is_invalid);
+        	offset_stop[0] = (int64_t)str2uint(&content_range_data[1],&is_invalid);
 
         	if(is_invalid)
                 	return false;
@@ -979,7 +979,7 @@ bool decode_http_content_range(const std::string* content_range,ssize_t* offset_
         return true;
 }
 
-std::string encode_http_content_range(size_t offset_start,size_t offset_stop,size_t file_size)
+std::string encode_http_content_range(int64_t offset_start,int64_t offset_stop,int64_t file_size)
 {
         std::string result = "bytes ";
         result.append(int2str(offset_start)); result.append(1,'-');
@@ -1172,7 +1172,7 @@ void generate_http_folder_response(const std::string* full_path,std::list<struct
 
         if(current_connection[0]->request.URI_path.size() > 128)
         {
-                std::string short_url = std::move(current_connection[0]->request.URI_path.substr(0,125));
+                std::string short_url = current_connection[0]->request.URI_path.substr(0,125);
                 short_url.append("...");
                 top_title.append(std::move(html_special_chars_escape(&short_url)));
         }
@@ -1186,7 +1186,7 @@ void generate_http_folder_response(const std::string* full_path,std::list<struct
 
         std::string file_link_base = current_connection[0]->request.URI_path;
 
-        file_link_base = std::move(rectify_path(&file_link_base));
+        file_link_base = rectify_path(&file_link_base);
 
         if(file_link_base[file_link_base.size() - 1] != '/')
                 file_link_base.append(1,'/');
@@ -1225,7 +1225,7 @@ void generate_http_folder_response(const std::string* full_path,std::list<struct
                 else
                 {
                         std::string trimmed_d_name = dir_entry->d_name;
-                        trimmed_d_name = std::move(trimmed_d_name.substr(0,125));
+                        trimmed_d_name = trimmed_d_name.substr(0,125);
                         trimmed_d_name.append("...");
                         directory_listing_content.append(std::move(html_special_chars_escape(&trimmed_d_name)));
                 }
@@ -1273,7 +1273,7 @@ void generate_http_folder_response(const std::string* full_path,std::list<struct
         str_replace_first(&current_connection[0]->response.response_body,"$dir_content",&directory_listing_content);
         str_replace_first(&current_connection[0]->response.response_body,"$footer",&footer);
 
-        current_connection[0]->response.response_headers["Content-Length"] = std::move(int2str(current_connection[0]->response.response_body.size()));
+        current_connection[0]->response.response_headers["Content-Length"] = int2str(current_connection[0]->response.response_body.size());
 
 
         if(current_connection[0]->request.request_method == HTTP_METHOD_HEAD)
@@ -1482,7 +1482,7 @@ void http_worker_thread(int worker_id)
 
     struct epoll_event triggered_event;
 
-    size_t max_request_size = str2uint(&SERVER_CONFIGURATION["max_request_size"]) * 1024;
+    uint64_t max_request_size = str2uint(&SERVER_CONFIGURATION["max_request_size"]) * 1024;
 
     unsigned int max_query_arg_limit = str2uint(&SERVER_CONFIGURATION["max_query_args"]);
     unsigned int max_POST_arg_limit = str2uint(&SERVER_CONFIGURATION["max_post_args"]);
@@ -1529,6 +1529,8 @@ void http_worker_thread(int worker_id)
             exit(-1);
         }
 
+
+	//shutdown triggered
         if(epoll_result > 0 and triggered_event.data.ptr == 0)
             break;
 
@@ -1935,7 +1937,7 @@ void http_worker_thread(int worker_id)
                     // support partial request
                     if(triggered_connection[0]->request.request_headers.find("Range") != triggered_connection[0]->request.request_headers.end())
                     {
-                        ssize_t req_start,req_stop;
+                        int64_t req_start,req_stop;
                         if(!decode_http_content_range(&triggered_connection[0]->request.request_headers["Range"],&req_start,&req_stop))
                         {
                             SERVER_JOURNAL_WRITE_ERROR.lock();
@@ -1959,7 +1961,7 @@ void http_worker_thread(int worker_id)
 			if(req_stop == -1)
 				req_stop = requested_file_size;
 
-                        if(req_start >= req_stop or (size_t)req_stop > requested_file_size)
+                        if(req_start >= req_stop or (uint64_t)req_stop > requested_file_size)
                         {
                             SERVER_JOURNAL_WRITE_ERROR.lock();
                             SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true);
@@ -2203,7 +2205,7 @@ void http_worker_thread(int worker_id)
 }
 
 void init_workers(int close_trigger)
-{
+{	
         for(unsigned int i=0; i<str2uint(&SERVER_CONFIGURATION["server_workers"]); i++)
         {
                 struct http_worker_node this_worker;

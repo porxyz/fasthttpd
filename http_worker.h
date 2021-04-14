@@ -139,7 +139,7 @@ bool parse_http_URI(const std::string* raw_request,std::string* URI,std::unorder
 
 bool parse_http_request_headers(const std::string* raw_request,std::unordered_map<std::string , std::string>* request_headers);
 
-bool decode_http_content_range(const std::string* content_range,ssize_t* offset_start,ssize_t* offset_stop);
+bool decode_http_content_range(const std::string* content_range,int64_t* offset_start,int64_t* offset_stop);
 
 bool parse_http_request_POST_body(std::list<struct http_connection>::iterator* current_connection,uint8_t parse_type);
 
@@ -149,7 +149,7 @@ unsigned int POST_files_limit,bool* POST_arg_limit_exceeded,bool* POST_files_lim
 
 bool is_POST_request_complete(std::list<struct http_connection>::iterator* http_connection);
 
-std::string encode_http_content_range(size_t offset_start,size_t offset_stop,size_t file_size);
+std::string encode_http_content_range(int64_t offset_start,int64_t offset_stop,int64_t file_size);
 
 void set_http_error_page(std::list<struct http_connection>::iterator* current_connection,int error_code,std::string reason = std::string());
 
@@ -159,7 +159,7 @@ void delete_http_connection(size_t worker_id,std::list<struct http_connection>::
 
 bool send_all(std::list<struct http_connection>::iterator* current_connection);
 
-bool recv_all(std::list<struct http_connection>::iterator* current_connection,char* buff,size_t buff_size,size_t max_request_limit,bool* limit_exceeded);
+bool recv_all(std::list<struct http_connection>::iterator* current_connection,char* buff,size_t buff_size,uint64_t max_request_limit,bool* limit_exceeded);
 
 void init_worker_aux_modules(int worker_id);
 

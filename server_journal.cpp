@@ -21,12 +21,16 @@ bool SERVER_JOURNAL_LOCALTIME_REPORTING = false;
 std::mutex SERVER_JOURNAL_WRITE_NORMAL;
 std::mutex SERVER_JOURNAL_WRITE_ERROR;
 
+
+std::ofstream error_file_stream;
+std::ofstream info_file_stream;
+
 void SERVER_JOURNAL_INIT(const char* info_file,const char* error_file)
 {
 	if(error_file != NULL)
 	{
-		std::ofstream error_file_stream;
-		error_file_stream.open(error_file);
+		//std::ofstream error_file_stream;
+		error_file_stream.open(error_file,std::ios::app);
 		
 		if(!error_file_stream.is_open())
 		{
@@ -42,8 +46,7 @@ void SERVER_JOURNAL_INIT(const char* info_file,const char* error_file)
 
 	if(info_file != NULL)
 	{
-		std::ofstream info_file_stream;
-		info_file_stream.open(info_file);
+		info_file_stream.open(info_file,std::ios::app);
 		if(!info_file_stream.is_open())
 		{
 			SERVER_ERROR_JOURNAL_stdlib_err(3,"Unable to open log file ( ",info_file,")");
