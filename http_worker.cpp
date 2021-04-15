@@ -36,7 +36,7 @@ std::mutex next_worker_mutex;
 std::atomic<size_t> total_http_connections;
 
 
-bool recv_all(std::list<struct http_connection>::iterator* current_connection,char* buff,size_t buff_size,size_t max_request_limit,bool* limit_exceeded)
+bool recv_all(std::list<struct http_connection>::iterator* current_connection,char* buff,size_t buff_size,uint64_t max_request_limit,bool* limit_exceeded)
 {
         size_t recv_count = current_connection[0]->recv_buffer.size();
         int recv_len;
