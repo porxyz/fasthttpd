@@ -97,18 +97,15 @@ std::string int2str(int64_t n,uint8_t base)
 
 void str_replace_first(std::string* s,const std::string& target,const std::string* replacement)
 {
-	size_t target_position = s->find(target);
-	if(target_position == std::string::npos)
-		return;
-
-	s->erase(target_position,target.size());
-	s->insert(target_position,*replacement);
- 
+	str_replace_first(s,target,replacement->c_str());
 }
 
 
 void str_replace_first(std::string* s,const std::string& target,const char* replacement)
 {
+	if(!s or !replacement)
+		return;
+
 	size_t target_position = s->find(target);
 	if(target_position == std::string::npos)
 		return;
