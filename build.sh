@@ -5,7 +5,7 @@ import sys
 
 enable_MOD_MYSQL = True
 enable_https = True
-debug = False;
+debug = False
 
 COMPILER = "g++"
 COMPILER_FLAGS = "-std=c++11 -Wall -Wfatal-errors"
@@ -76,7 +76,7 @@ def compile_helper_functions():
 		compiler_return_value = os.system(COMPILER + " -c ../helper_functions.cpp " + COMPILER_FLAGS)
 		if compiler_return_value != 0:
 			print("Can not compile helper functions")
-			exit();
+			exit()
 			
 
 def compile_server_config():
