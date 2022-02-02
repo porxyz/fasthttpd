@@ -414,7 +414,81 @@ bool parse_http_URI(const std::string* raw_request,std::string* URI,std::unorder
         return parse_result;
 }
 
-
+void parse_http_request_cookies(std::list<struct http_connection>::iterator* current_connection)
+{
+	std::string header_name = "Cookie";
+	std::string raw_cookie;
+	
+	if(current_connection[0]->request.request_headers.find(header_name) != current_connection[0]->request.request_headers.end())
+		raw_cookie = current_connection[0]->request.request_headers.at(header_name);
+	else
+	{
+		header_name[0] = 'c';
+		if(current_connection[0]->request.request_headers.find(header_name) != current_connection[0]->request.request_headers.end())
+			raw_cookie = current_connection[0]->request.request_headers.at(header_name);
+	}
+	
+	if(raw_cookie.empty())
+		return;
+		
+		
+	current_connection[0]->request.COOKIES = new (std::nothrow) std::unordered_map<std::string,std::string>();
+	if(!current_connection[0]->request.COOKIES)
+		return;
+		
+		
+	size_t cookie_header_size = raw_cookie.size();
+	const char* cookie_buff = raw_cookie.c_str();
+	
+	std::string name,value;
+	bool parser_state = 0;
+	
+	for(size_t i=0; i<cookie_header_size; i++)
+	{
+		if(!parser_state)
+		{
+			if(cookie_buff[i] == '=')
+				parser_state = 1;
+				
+			//named cookie without value
+			else if(cookie_buff[i] == ';')
+			{
+				if(!name.empty())
+					current_connection[0]->request.COOKIES[0][name] = "";
+				
+				name.clear();
+				
+				if(i+1 < cookie_header_size and cookie_buff[i+1] == ' ')
+					i++;
+			}
+			
+			else
+				name.append(1,cookie_buff[i]);
+		}
+		else
+		{
+			if(cookie_buff[i] == ';')
+			{
+				if(!name.empty())
+					current_connection[0]->request.COOKIES[0][name] = value;
+				
+				name.clear();
+				value.clear();
+				
+				if(i+1 < cookie_header_size and cookie_buff[i+1] == ' ')
+					i++;
+				
+				parser_state = 0;
+			}
+			
+			else
+				value.append(1,cookie_buff[i]);
+		}
+	}
+	
+	if(!name.empty() and !value.empty())
+		current_connection[0]->request.COOKIES[0][name] = value;
+}
 
 bool parse_http_request_POST_body(std::list<struct http_connection>::iterator* current_connection,unsigned int args_limit,unsigned int files_limit,bool continue_if_exceeded)
 {
@@ -988,6 +1062,85 @@ std::string encode_http_content_range(int64_t offset_start,int64_t offset_stop,i
         return result;
 }
 
+
+void init_http_cookie(struct HTTP_COOKIE *cookie,const char* name,const char* value)
+{
+	if(!cookie or !name or !value)
+		return;
+		
+	cookie->name = name;
+	cookie->value = value;
+	
+	cookie->max_age = 0;
+	cookie->expires = (time_t)0;
+	
+	cookie->http_only = false;
+	cookie->secure = false;
+}
+
+void init_http_cookie(struct HTTP_COOKIE *cookie,const std::string* name,const std::string* value)
+{
+	if(!cookie or !name or !value)
+		return;
+		
+	init_http_cookie(cookie,name->c_str(),value->c_str());
+}
+
+void generate_cookie_header(std::string* raw_response,const struct HTTP_COOKIE* cookie)
+{
+	if(!raw_response or !cookie)
+		return;
+		
+	raw_response->append("Set-Cookie: ");
+	raw_response->append(cookie->name);
+	raw_response->append("=");
+	raw_response->append(cookie->value);
+	raw_response->append("; ");
+	
+	if(cookie->expires)
+	{
+		raw_response->append("Expires: ");
+		raw_response->append(convert_ctime2_http_date(cookie->expires));
+		raw_response->append("; ");
+	}
+
+	if(cookie->max_age)
+	{
+		raw_response->append("Max-Age: ");
+		raw_response->append(int2str(cookie->max_age));
+		raw_response->append("; ");
+	}
+	
+	if(!cookie->domain.empty())
+	{
+		raw_response->append("Domain=");
+		raw_response->append(cookie->domain);
+		raw_response->append("; ");
+	}
+
+	if(!cookie->path.empty())
+	{
+		raw_response->append("Path=");
+		raw_response->append(cookie->path);
+		raw_response->append("; ");
+	}
+
+	if(!cookie->same_site.empty())
+	{
+		raw_response->append("SameSite=");
+		raw_response->append(cookie->same_site);
+		raw_response->append("; ");
+	}
+
+	if(cookie->http_only)
+		raw_response->append("HttpOnly; ");
+
+	if(cookie->secure)
+		raw_response->append("Secure; ");
+
+	raw_response->append("\r\n");
+}
+
 void generate_http_output(std::list<struct http_connection>::iterator* current_connection)
 {
         if(current_connection[0]->http_version == HTTP_VERSION_1)
@@ -1069,6 +1222,17 @@ void generate_http_output(std::list<struct http_connection>::iterator* current_c
                 current_connection[0]->send_buffer.append(i->first); current_connection[0]->send_buffer.append(": ");
                 current_connection[0]->send_buffer.append(i->second); current_connection[0]->send_buffer.append("\r\n");
         }
+
+
+	if(current_connection[0]->response.COOKIES)
+	{
+		for(size_t i=0; i<current_connection[0]->response.COOKIES->size(); i++)
+			generate_cookie_header(&current_connection[0]->send_buffer,&current_connection[0]->response.COOKIES->at(i));
+			
+			
+		delete(current_connection[0]->response.COOKIES);
+		current_connection[0]->response.COOKIES = NULL;
+	}
 
         current_connection[0]->send_buffer.append("\r\n");
         current_connection[0]->send_buffer.append(current_connection[0]->response.response_body);
@@ -1319,6 +1483,7 @@ void worker_add_client(int new_client,const char* remote_addr,std::string* serve
 
         current_connection.request.request_method = HTTP_METHOD_UNDEFINED;
         current_connection.request.POST_type = HTTP_POST_TYPE_UNDEFINED;
+        current_connection.request.COOKIES = NULL;
         current_connection.request.POST_query = NULL;
         current_connection.request.POST_files = NULL;
 
@@ -1327,6 +1492,8 @@ void worker_add_client(int new_client,const char* remote_addr,std::string* serve
         current_connection.response.response_headers["Server"].append(SERVER_CONFIGURATION["server_version"]);
         current_connection.response.response_headers["Date"] = convert_ctime2_http_date(time(NULL));
         current_connection.response.response_headers["Connection"] = "close";
+        
+        current_connection.response.COOKIES = NULL;
 
         #ifndef DISABLE_HTTPS
         if(https)
@@ -1396,6 +1563,18 @@ void free_http_connection(std::list<struct http_connection>::iterator* current_c
                 delete(current_connection[0]->request.POST_files);
                 current_connection[0]->request.POST_files = NULL;
         }
+        
+        if(current_connection[0]->request.COOKIES)
+        {
+         	delete(current_connection[0]->request.COOKIES);
+       	        current_connection[0]->request.COOKIES = NULL;
+        }
+        
+        if(current_connection[0]->response.COOKIES)
+        {
+                delete(current_connection[0]->response.COOKIES);
+                current_connection[0]->response.COOKIES = NULL;
+        }
 
         if(current_connection[0]->state == HTTP_STATE_FILE_BOUND and current_connection[0]->requested_fd != -1)
         {
@@ -1438,6 +1617,18 @@ void delete_http_connection(size_t worker_id,std::list<struct http_connection>::
                                 delete(current_connection[0]->request.POST_files);
                                 current_connection[0]->request.POST_files = NULL;
                         }
+                        
+                        if(current_connection[0]->request.COOKIES)
+        		{
+         			delete(current_connection[0]->request.COOKIES);
+        		        current_connection[0]->request.COOKIES = NULL;
+        		}
+                        
+                        if(current_connection[0]->response.COOKIES)
+        		{
+         			delete(current_connection[0]->response.COOKIES);
+        		        current_connection[0]->response.COOKIES = NULL;
+        		}
 
                         current_connection[0]->request.POST_type = HTTP_POST_TYPE_UNDEFINED;
 
@@ -1827,10 +2018,14 @@ void http_worker_thread(int worker_id)
                                         continue;
                                 }
                         }
+                        
+                        //parse http cookies
+                        parse_http_request_cookies(triggered_connection);
 
                         triggered_connection[0]->state = HTTP_STATE_CUSTOM_BOUND;
                         triggered_connection[0]->response.response_code = 200;
                         triggered_connection[0]->response.response_headers["Content-Type"] = "text/html; charset=utf-8";
+                        
                         run_custom_page_generator(triggered_connection,worker_id,&custom_page_generator);
                         continue;
                     }
@@ -2270,7 +2465,6 @@ void free_worker_aux_modules(int worker_id)
         delete(http_workers[worker_id].mysql_db_handle);
         #endif
 }
-
 
 
 
