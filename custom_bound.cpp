@@ -139,13 +139,6 @@ void add_custom_bound_path(http_function_t page_generator,const char* path,bool 
 
 
 
-
-
-
-
-
-
-
 /*
  Here you can add custom handlers to different paths
  in order to suit your purpose
@@ -153,6 +146,7 @@ void add_custom_bound_path(http_function_t page_generator,const char* path,bool 
 
 //#include "custom_bound/index.h"
 #include "custom_bound/post_test.h"
+#include "custom_bound/cookie_test.h"
 
 #ifndef NO_MOD_MYSQL
 #include "custom_bound/db_insert.h"
@@ -164,13 +158,11 @@ void load_custom_bound_paths()
 	
 	
 	add_custom_bound_path(post_test_gen,"/post_test");
+	add_custom_bound_path(cookie_test_gen,"/cookie_test");
 	
 	#ifndef NO_MOD_MYSQL
 	add_custom_bound_path(db_insert_generator,"/db_insert");
 	#endif
 }
-
-
-
 
 
