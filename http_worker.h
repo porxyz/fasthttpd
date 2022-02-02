@@ -36,7 +36,7 @@
 #include <mutex> 
 #include <atomic> 
 #include <vector> 
-#include <time.h>
+#include <ctime>
 
 #ifndef DISABLE_HTTPS
 #include <openssl/ssl.h>
@@ -54,6 +54,18 @@ struct HTTP_POST_FILE
 	std::string type;
 };
 
+struct HTTP_COOKIE
+{
+	std::string name;
+	std::string value;
+	time_t expires;
+	unsigned int max_age;
+	std::string same_site;
+	std::string domain;
+	std::string path;
+	bool secure;
+	bool http_only;
+};
 
 struct http_request
 {
@@ -63,6 +75,7 @@ struct http_request
 	std::string URI_path;
 	std::unordered_map <std::string,std::string> URI_query;
 	std::unordered_map <std::string,std::string>* POST_query;
+	std::unordered_map <std::string,std::string>* COOKIES;
 	std::unordered_map<std::string, std::unordered_map<std::string,struct HTTP_POST_FILE>>* POST_files;
 };
 
@@ -71,6 +84,7 @@ struct http_response
 	int response_code;
 	std::unordered_map <std::string , std::string> response_headers;
 	std::string response_body;
+	std::vector<struct HTTP_COOKIE> *COOKIES;
 };
 
 
@@ -139,6 +153,8 @@ bool parse_http_URI(const std::string* raw_request,std::string* URI,std::unorder
 
 bool parse_http_request_headers(const std::string* raw_request,std::unordered_map<std::string , std::string>* request_headers);
 
+void parse_http_request_cookies(std::list<struct http_connection>::iterator* current_connection);
+
 bool decode_http_content_range(const std::string* content_range,int64_t* offset_start,int64_t* offset_stop);
 
 bool parse_http_request_POST_body(std::list<struct http_connection>::iterator* current_connection,uint8_t parse_type);
@@ -150,6 +166,12 @@ unsigned int POST_files_limit,bool* POST_arg_limit_exceeded,bool* POST_files_lim
 bool is_POST_request_complete(std::list<struct http_connection>::iterator* http_connection);
 
 std::string encode_http_content_range(int64_t offset_start,int64_t offset_stop,int64_t file_size);
+
+void init_http_cookie(struct HTTP_COOKIE* c,const char* name,const char* value);
+
+void init_http_cookie(struct HTTP_COOKIE* c,const std::string* name,const std::string* value);
+
+void generate_cookie_header(std::string* raw_request,const struct HTTP_COOKIE* c);
 
 void set_http_error_page(std::list<struct http_connection>::iterator* current_connection,int error_code,std::string reason = std::string());
 
@@ -166,7 +188,6 @@ void init_worker_aux_modules(int worker_id);
 void free_worker_aux_modules(int worker_id);
 
 #endif
-
 
 
 
