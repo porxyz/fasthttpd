@@ -30,8 +30,13 @@
 #include "http_worker.h"
 
 std::vector<struct http_worker_node> http_workers;
+
+//for round robin load balancing
 unsigned int next_worker = 0;
 std::mutex next_worker_mutex;
+
+//for fair load balancing
+std::vector<std::atomic<int>> connections_per_worker;
 
 std::atomic<size_t> total_http_connections;
 
@@ -1456,16 +1461,34 @@ void worker_add_client(int new_client,const char* remote_addr,std::string* serve
 {
         int worker_id;
 
-        next_worker_mutex.lock();
+	if(is_server_load_balancer_fair)
+	{
+		worker_id = 0;
+		int min_connections = connections_per_worker[0];
+		
+		size_t n_workers = connections_per_worker.size(); 
+		for(size_t i=1; i<n_workers; i++)
+		{
+			if(connections_per_worker[i] < min_connections)
+			{
+				min_connections = connections_per_worker[i];
+				worker_id = i;
+			}
+		}
+	}
+	
+	else
+	{
+        	next_worker_mutex.lock();
 
-        worker_id = next_worker;
-        next_worker++;
+        	worker_id = next_worker;
+        	next_worker++;
 
-        if(next_worker >= http_workers.size())
-                next_worker = 0;
+        	if(next_worker >= http_workers.size())
+                	next_worker = 0;
 
-        next_worker_mutex.unlock();
-
+        	next_worker_mutex.unlock();
+	}
 
         struct http_connection current_connection;
 
@@ -1533,8 +1556,10 @@ void worker_add_client(int new_client,const char* remote_addr,std::string* serve
                 exit(-1);
         }
 
-        http_workers[worker_id].connections_mutex->unlock();
+	if(is_server_load_balancer_fair)
+		connections_per_worker[worker_id]++;
 
+        http_workers[worker_id].connections_mutex->unlock();
 }
 
 
@@ -1661,6 +1686,8 @@ void delete_http_connection(size_t worker_id,std::list<struct http_connection>::
                 http_workers[worker_id].connections_mutex->unlock();
 
 
+	if(is_server_load_balancer_fair)
+		connections_per_worker[worker_id]--;
 
         total_http_connections--;
 }
@@ -2376,10 +2403,7 @@ void http_worker_thread(int worker_id)
                 SERVER_JOURNAL_WRITE_ERROR.unlock();
             }
 
-
         }
-
-
 
     }
 
@@ -2428,6 +2452,10 @@ void init_workers(int close_trigger)
                 http_workers[http_workers.size() - 1].connections_mutex = new std::mutex();
 
         }
+        
+        
+        if(is_server_load_balancer_fair)
+        	connections_per_worker = std::vector<std::atomic<int>>(str2uint(&SERVER_CONFIGURATION["server_workers"]));
 }
 
 
@@ -2465,6 +2493,7 @@ void free_worker_aux_modules(int worker_id)
         delete(http_workers[worker_id].mysql_db_handle);
         #endif
 }
+
 
 
 

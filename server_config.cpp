@@ -19,6 +19,8 @@ std::unordered_map<std::string , std::string > SERVER_HOSTNAMES;
 std::unordered_map<int , std::string > SERVER_ERROR_PAGES;
 std::string SERVER_DIRECTORY_LISTING_TEMPLATE;
 
+bool is_server_load_balancer_fair = false;
+
 void parse_config_line(const std::string *config_line,std::unordered_map<std::string,std::string>* config_map)
 {
 	size_t separator_position = config_line->find('=');
@@ -543,6 +545,22 @@ void load_server_config(char* config_file)
 	
 	load_directory_listing_template();
 
+
+	
+	//load balancer algo
+	if(!server_config_variable_exists("load_balancer_algo"))
+	{
+		SERVER_CONFIGURATION["load_balancer_algo"] = DEFAULT_CONFIG_SERVER_LOAD_BALANCER_ALGO;
+		SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING)); 
+		SERVER_JOURNAL_WRITE(" No load balancer algorithm defined!\nLoading default: ");
+		SERVER_JOURNAL_WRITE(SERVER_CONFIGURATION["load_balancer_algo"]);
+		SERVER_JOURNAL_WRITE("\n\n");
+	}
+	
+	if(SERVER_CONFIGURATION["load_balancer_algo"] == "fair")
+		is_server_load_balancer_fair = true;
+
+	//
 
 
 	if(is_server_config_variable_true("enable_MOD_MYSQL"))

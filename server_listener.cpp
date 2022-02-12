@@ -98,12 +98,11 @@ int init_server_listener_socket(bool https)
 		return -1;
 	}
 
-	if(listen(http_listener,SOMAXCONN) == -1)
+	if(listen(http_listener,str2uint(&SERVER_CONFIGURATION["max_connections"])) == -1)
 	{
                 SERVER_ERROR_JOURNAL_stdlib_err("Unable to put the listener socket in listening state!");
 		return -1;
 	}
-
 
 	return http_listener;
 }
@@ -203,7 +202,6 @@ int run_server_listener_loop(int server_epoll, int http_listener,bool https
 				SERVER_ERROR_JOURNAL_stdlib_err("Unable to listen to epoll!");
 				return -1;
 			}
-
 		}
 
 		else if(epoll_result > 0)
@@ -223,9 +221,12 @@ int run_server_listener_loop(int server_epoll, int http_listener,bool https
 								
 							if(errno == EAGAIN or errno == EWOULDBLOCK)
 								break;
-
 						
                                                         SERVER_ERROR_JOURNAL_stdlib_err("Unable to accept the incoming connection!");
+                                                        
+                                                        if(errno == EMFILE or errno == ENFILE)
+                                                        	continue;
+                                                        
 							return -1;
 						}
 

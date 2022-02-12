@@ -23,10 +23,12 @@
 #define DEFAULT_CONFIG_SERVER_READ_BUFFER_SIZE "65"
 #define DEFAULT_CONFIG_SERVER_REQ_TIMEOUT "30" 
 #define DEFAULT_CONFIG_SERVER_WORKERS "50"
+#define DEFAULT_CONFIG_SERVER_LOAD_BALANCER_ALGO "rr" 
 #define DEFAULT_CONFIG_SERVER_MAX_REQ_SIZE "1024"
 #define DEFAULT_CONFIG_SERVER_MAX_UPLOAD_FILES "32"
 #define DEFAULT_CONFIG_SERVER_MAX_POST_ARGS "64"
 #define DEFAULT_CONFIG_SERVER_MAX_QUERY_ARGS "32"
+
 
 #define DEFAULT_CONFIG_SERVER_ERROR_PAGE_FOLDER "error_pages"
 
@@ -49,6 +51,7 @@ extern std::unordered_map<std::string , std::string > SERVER_CONFIGURATION;
 extern std::unordered_map<std::string , std::string > SERVER_HOSTNAMES;
 extern std::unordered_map<int , std::string > SERVER_ERROR_PAGES;
 extern std::string SERVER_DIRECTORY_LISTING_TEMPLATE;
+extern bool is_server_load_balancer_fair;
 
 void load_server_config(char* config_file = NULL);
 
