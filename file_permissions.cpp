@@ -1,7 +1,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include <mutex>
+#include <list>
 #include <fstream>
 #include <regex>
 
@@ -18,35 +18,63 @@ struct access_descriptor
 	std::vector<std::regex> entry_list;
 };
 
-std::unordered_map <std::string,struct access_descriptor> access_descriptor_list;
-std::mutex access_descriptors_mutex;
+struct access_descriptor_cache_entry
+{
+	struct access_descriptor descriptor;
+	std::list<std::string>::iterator list_iterator;
+};
 
-inline bool access_descriptor_exists(const std::string* path)
+bool disable_access_control_API;
+size_t max_AD_cache_size;
+
+std::vector<std::unordered_map<std::string, struct access_descriptor_cache_entry>> access_descriptor_cache;
+std::vector<std::list<std::string>> access_descriptor_list;
+
+
+static inline bool is_AD_in_cache(size_t worker_id, const std::string& path)
 {
 	bool found = false;
-
-	access_descriptors_mutex.lock();
 	
-	if(access_descriptor_list.find(path[0]) != access_descriptor_list.end())
+	auto it = access_descriptor_cache[worker_id].find(path);
+	if(it != access_descriptor_cache[worker_id].end())
+	{
 		found = true;
-	
-	access_descriptors_mutex.unlock();
-
+		
+		//perform LRU cache update
+		struct access_descriptor_cache_entry cache_entry = it->second;
+		
+		access_descriptor_list[worker_id].erase(cache_entry.list_iterator);
+		access_descriptor_list[worker_id].push_front(path);
+		
+		cache_entry.list_iterator = access_descriptor_list[worker_id].begin();
+		
+		access_descriptor_cache[worker_id][path] = cache_entry;
+	}
 
 	return found;
 }
 
+//remove last entry in the LRU cache
+static inline void remove_last_used_AD(size_t worker_id)
+{
+	if(access_descriptor_list[worker_id].size() <= max_AD_cache_size)
+		return;
+	
+	std::string last_used = access_descriptor_list[worker_id].back();
+	access_descriptor_cache[worker_id].erase(last_used);
+	access_descriptor_list[worker_id].pop_back();
+}
 
-inline bool pattern_compare(const std::string& needle,const std::regex& haystack)
+static inline bool pattern_compare(const std::string& needle,const std::regex& haystack)
 {
 	return std::regex_match(needle,haystack);
 }
 
-void read_access_descriptor_file(const std::string* path)
+void read_access_config_file(size_t worker_id, const std::string& path)
 {
-	struct access_descriptor result;
-	std::string access_configuration_file_path = path[0];
-
+	struct access_descriptor_cache_entry cache_entry;
+	
+	std::string access_configuration_file_path = path;
 	access_configuration_file_path.append("/.access_config");
 
 	std::ifstream access_configuration_file;
@@ -54,16 +82,19 @@ void read_access_descriptor_file(const std::string* path)
 
 	if(!access_configuration_file.is_open())
 	{
-		result.defined = false;
+		cache_entry.descriptor.defined = false;
+		
 		access_configuration_file.close();
-		access_descriptors_mutex.lock();
-		access_descriptor_list[path[0]] = result;
-		access_descriptors_mutex.unlock();
+		
+		access_descriptor_list[worker_id].push_front(path);
+		cache_entry.list_iterator = access_descriptor_list[worker_id].begin();
+		access_descriptor_cache[worker_id][path] = cache_entry;
+		remove_last_used_AD(worker_id);
 		
 		return;
 	}
 
-	result.defined = true;
+	cache_entry.descriptor.defined = true;
 
 	std::string current_line;
 	std::unordered_map <std::string , std::string> config_params_map;
@@ -100,7 +131,7 @@ void read_access_descriptor_file(const std::string* path)
 			escaped_haystack.insert(target_position,".*");
 		}
 
-		result.entry_list.push_back(std::regex(escaped_haystack));
+		cache_entry.descriptor.entry_list.push_back(std::regex(escaped_haystack));
 	}
 
 	access_configuration_file.close();
@@ -109,139 +140,99 @@ void read_access_descriptor_file(const std::string* path)
 	if(config_params_map.find(std::string("order")) != config_params_map.end())
 	{
 		if(config_params_map["order"] == std::string("allow"))
-			result.order_deny = false;
-			
+			cache_entry.descriptor.order_deny = false;
 			
 		else
-			result.order_deny = true;
+			cache_entry.descriptor.order_deny = true;
 			
 	}
 	else
-		result.order_deny = true;
+		cache_entry.descriptor.order_deny = true;
 
 
 	if(config_params_map.find(std::string("fake_404")) != config_params_map.end())
 	{
 		if(config_params_map["fake_404"] == std::string("true") or config_params_map["fake_404"] == std::string("1"))
-			result.fake_404 = true;
-			
+			cache_entry.descriptor.fake_404 = true;
 			
 		else
-			result.fake_404 = false;
+			cache_entry.descriptor.fake_404 = false;
 	}
 	else
-		result.fake_404 = false;
+		cache_entry.descriptor.fake_404 = false;
 
-
-	access_descriptors_mutex.lock();
-	access_descriptor_list[path[0]] = result;
-	access_descriptors_mutex.unlock();
+	access_descriptor_list[worker_id].push_front(path);
+	cache_entry.list_iterator = access_descriptor_list[worker_id].begin();
+	access_descriptor_cache[worker_id][path] = cache_entry;
+	remove_last_used_AD(worker_id);
 }
 
 
-int measure_host_path_depth(const std::string* filename)
+static inline int check_with_descriptor(const std::string& filename,struct access_descriptor& desc)
 {
-	int path_depth = 0;
-	std::vector<std::string> path_tree;
-	explode(filename,"/",&path_tree);
-
-	for(size_t i=0; i < path_tree.size(); i++)
+	if(desc.defined)
 	{
-
-		if(path_tree[i] == "." or path_tree[i].size() == 0)
-			continue;
-
-		path_depth+=1;
-	}
-
-	return path_depth;
-}
-
-int check_file_access(const std::string* filename,const std::string* host_path)
-{
-	std::vector<std::string> path_tree;
-	explode(filename,"/",&path_tree);
-	
-	
-	// max path depth server config
-	if(path_tree.size() > 64)
-		return 400;
-
-
-	std::string current_path;
-	int path_depth = 0;
-	struct access_descriptor* desc;
-
-	int host_path_depth = measure_host_path_depth(host_path);
-
-	if(filename[0][0] == '/')
-		path_tree[1].insert(0,1,'/');
-
-
-	for(size_t i=0; i < path_tree.size(); i++)
-	{
-
-		if(path_tree[i] == "." or path_tree[i].size() == 0)
-			continue;
-
-		if(path_tree[i] == ".." and path_depth < host_path_depth)
+		bool match = false;
+		
+		for(size_t i = 0; i<desc.entry_list.size(); i++)
 		{
-			current_path.append("/..");
-			path_depth+=1;
-			continue;
-		}
-
-		if(path_tree[i] == ".." and path_depth > host_path_depth)
-		{
-			current_path = current_path.substr(0,current_path.find_last_of('/'));
-			path_depth-=1;
-			continue;
-		}
-
-
-		if(path_depth >= host_path_depth and path_tree[i] != "..")
-		{
-
-			if(!access_descriptor_exists(&current_path))
-				read_access_descriptor_file(&current_path);
-
-
-			desc = &access_descriptor_list[current_path];
-			if(desc->defined)
+			if(pattern_compare(filename,desc.entry_list[i]))
 			{
-				bool match = false;
-				for(size_t j = 0; j<desc->entry_list.size(); j++)
-				{
-					if(pattern_compare(path_tree[i],desc->entry_list[j]))
-					{
-						match = true;
-						break;
-					}
-				}
-
-				if(match and desc->order_deny)
-					return (desc->fake_404) ? 404 : 403;
-					
-				if(!match and !desc->order_deny)
-					return (desc->fake_404) ? 404 : 403;
-
+				match = true;
+				break;
 			}
-
-
 		}
 
-		if(path_tree[i] != "..")
-		{
-			if(path_depth != 0)
-				current_path.append("/");
-				
-			current_path.append(path_tree[i]);
-			path_depth+=1;
-		}
-
+		if(match and desc.order_deny)
+			return (desc.fake_404) ? 404 : 403;
+					
+		if(!match and !desc.order_deny)
+			return (desc.fake_404) ? 404 : 403;
 	}
+			
+	return 0;
+}
 
+int check_file_access(size_t worker_id,const std::string& filename,const std::string& host_path)
+{
+	if(disable_access_control_API)
+		return 0;
+	
+	std::vector<std::string> path_tree;
+	explode(&filename,"/",&path_tree);
+	
+	std::string current_path = host_path;
+	if(host_path[host_path.size() - 1] == '/')
+		current_path.pop_back();
+		
+	for(size_t i=0; i<path_tree.size(); i++)
+	{
+		if(path_tree[i].empty())
+			continue;
+			
+		if(!is_AD_in_cache(worker_id,current_path))
+			read_access_config_file(worker_id,current_path);
+			
+		int check_val = check_with_descriptor(path_tree[i],access_descriptor_cache[worker_id][current_path].descriptor);
+		if(check_val != 0)
+			return check_val;
+			
+		current_path.append(1,'/');
+		current_path.append(path_tree[i]);
+	}
+	
 	return 0;
 }
 
 
+void init_file_access_control_API(size_t num_workers)
+{
+	disable_access_control_API = false;
+	if(is_server_config_variable_true("disable_file_access_API"))
+		disable_access_control_API = true;
+		
+	max_AD_cache_size = str2uint(&SERVER_CONFIGURATION["max_file_access_cache_size"]) * 1000;
+	
+	access_descriptor_cache = std::vector<std::unordered_map<std::string, struct access_descriptor_cache_entry>>(num_workers);
+	access_descriptor_list = std::vector<std::list<std::string>>(num_workers);
+}
