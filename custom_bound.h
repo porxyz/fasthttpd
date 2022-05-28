@@ -32,9 +32,9 @@ struct custom_bound_entry
 	http_function_t page_generator;
 };
 
-bool check_custom_bound_path(const std::string* filename,const std::string* host_path,struct custom_bound_entry* result);
+bool check_custom_bound_path(const std::string& filename,struct custom_bound_entry* result);
 void run_custom_page_generator(std::list<struct http_connection>::iterator* current_connection,size_t worker_id,struct custom_bound_entry* generator);
-void add_custom_bound_path(http_function_t page_generator,const char* path,bool execute_only_when_loaded = true,const char* hostname = ANY_HOSTNAME_PATH);
+void add_custom_bound_path(http_function_t page_generator,const char* path,const char* hostname = ANY_HOSTNAME_PATH,bool execute_only_when_loaded = true);
 void load_custom_bound_paths();
 
 #endif
