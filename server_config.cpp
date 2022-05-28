@@ -379,31 +379,20 @@ void load_server_config(char* config_file)
 
 
 	//sanity check 
- 		
 	std::vector<unsigned int> allowed_ip_version = {4,6};
 	check_server_config_uintval("ip_version",DEFAULT_CONFIG_SERVER_IP_VERSION,0,0,&allowed_ip_version);
 	
 	check_server_config_uintval("listen_http_port",DEFAULT_CONFIG_SERVER_HTTP_PORT,1,65534);
-		
 	check_server_config_uintval("max_connections",DEFAULT_CONFIG_SERVER_MAXCONN,1,1 << 28);
-	
 	check_server_config_uintval("max_uploaded_files",DEFAULT_CONFIG_SERVER_MAX_UPLOAD_FILES,1,1 << 14);
-	
 	check_server_config_uintval("max_post_args",DEFAULT_CONFIG_SERVER_MAX_POST_ARGS,1,1 << 14);
-	
 	check_server_config_uintval("max_query_args",DEFAULT_CONFIG_SERVER_MAX_QUERY_ARGS,1,1 << 14);
-	
 	check_server_config_uintval("shutdown_wait_timeout",DEFAULT_CONFIG_SERVER_SHUTDOWN_TIMEOUT,2,20);
-	
 	check_server_config_uintval("request_timeout",DEFAULT_CONFIG_SERVER_REQ_TIMEOUT,0,600);
-	
 	check_server_config_uintval("read_buffer_size",DEFAULT_CONFIG_SERVER_READ_BUFFER_SIZE,1,uint64_t(1) << 34);
-
 	check_server_config_uintval("server_workers",DEFAULT_CONFIG_SERVER_WORKERS,1,1 << 14);
-	
 	check_server_config_uintval("max_request_size",DEFAULT_CONFIG_SERVER_MAX_REQ_SIZE,4,uint64_t(1) << 34);
-
-
+	check_server_config_uintval("max_file_access_cache_size",DEFAULT_CONFIG_SERVER_MAX_FILE_ACCESS_CACHE_SIZE,1,1 << 24);
 
 	if(!server_config_variable_exists("ip_addr"))
 	{
@@ -632,8 +621,3 @@ void load_server_config(char* config_file)
 	}
 
 }
-
-
-
-
-
