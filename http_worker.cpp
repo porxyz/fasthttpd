@@ -889,6 +889,8 @@ bool check_request_length(std::list<struct http_connection>::iterator* triggered
                 SERVER_JOURNAL_WRITE_ERROR.unlock();
 
                 set_http_error_page(triggered_connection,411);
+                SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                
                 if(!send_all(triggered_connection))
                 {
                     delete_http_connection(worker_id,triggered_connection);
@@ -914,6 +916,8 @@ bool check_request_length(std::list<struct http_connection>::iterator* triggered
         SERVER_JOURNAL_WRITE_ERROR.unlock();
 
         set_http_error_page(triggered_connection,400);
+        SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+        
         if(!send_all(triggered_connection))
         {
             delete_http_connection(worker_id,triggered_connection);
@@ -938,6 +942,8 @@ bool check_request_length(std::list<struct http_connection>::iterator* triggered
         else
         {
             set_http_error_page(triggered_connection,400);
+            SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+            
             if(!send_all(triggered_connection))
             {
                 delete_http_connection(worker_id,triggered_connection);
@@ -959,6 +965,8 @@ bool check_request_length(std::list<struct http_connection>::iterator* triggered
         SERVER_JOURNAL_WRITE_ERROR.unlock();
 
         set_http_error_page(triggered_connection,413);
+        SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+        
         if(!send_all(triggered_connection))
         {
             delete_http_connection(worker_id,triggered_connection);
@@ -1810,6 +1818,8 @@ void http_worker_thread(int worker_id)
                         SERVER_JOURNAL_WRITE_ERROR.unlock();
 
                         set_http_error_page(triggered_connection,413);
+                        SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                        
                         if(!send_all(triggered_connection))
                         {
                             delete_http_connection(worker_id,triggered_connection);
@@ -1832,6 +1842,8 @@ void http_worker_thread(int worker_id)
                             SERVER_JOURNAL_WRITE_ERROR.unlock();
 
                             set_http_error_page(triggered_connection,400);
+                            SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                            
                             if(!send_all(triggered_connection))
                             {
                                 delete_http_connection(worker_id,triggered_connection);
@@ -1860,6 +1872,8 @@ void http_worker_thread(int worker_id)
                             SERVER_JOURNAL_WRITE_ERROR.unlock();
 
                             set_http_error_page(triggered_connection,400);
+                            SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                            
                             if(!send_all(triggered_connection))
                             {
                                 delete_http_connection(worker_id,triggered_connection);
@@ -1885,6 +1899,8 @@ void http_worker_thread(int worker_id)
                             SERVER_JOURNAL_WRITE_ERROR.unlock();
 
                             set_http_error_page(triggered_connection,400);
+                            SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                            
                             if(!send_all(triggered_connection))
                             {
                                 delete_http_connection(worker_id,triggered_connection);
@@ -1908,6 +1924,8 @@ void http_worker_thread(int worker_id)
                                 SERVER_JOURNAL_WRITE_ERROR.unlock();
 
                                 set_http_error_page(triggered_connection,400);
+                                SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                                
                                 if(!send_all(triggered_connection))
                                 {
                                         delete_http_connection(worker_id,triggered_connection);
@@ -1951,6 +1969,8 @@ void http_worker_thread(int worker_id)
                             SERVER_JOURNAL_WRITE_ERROR.unlock();
 
                             set_http_error_page(triggered_connection,400);
+                            SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                            
                             if(!send_all(triggered_connection))
                             {
                                 delete_http_connection(worker_id,triggered_connection);
@@ -1973,7 +1993,6 @@ void http_worker_thread(int worker_id)
                             triggered_connection[0]->response.response_headers["Connection"] = "keep-alive";
 
 
-
                     /*
                      Check if the request has the declared size bigger that maximum request
                      If the request has no content-length header then return error 411
@@ -1983,15 +2002,20 @@ void http_worker_thread(int worker_id)
                         continue;
 
 
-                    std::string full_path = SERVER_HOSTNAMES[real_hostname];
+		    std::string relative_path = rectify_path(&triggered_connection[0]->request.URI_path);
+		    
+                    std::string full_path = SERVER_HOSTNAMES[real_hostname];   
                     full_path.append(1,'/');
-                    full_path.append(rectify_path(&triggered_connection[0]->request.URI_path));
-
-
-                    int check_file_code = check_file_access(&full_path,&real_hostname);
+                    full_path.append(relative_path);
+                    full_path = rectify_path(&full_path);
+                    
+                  
+                    int check_file_code = check_file_access(worker_id,relative_path,SERVER_HOSTNAMES[real_hostname]);
                     if(check_file_code != 0)
                     {
                         set_http_error_page(triggered_connection,check_file_code);
+                        SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                        
                         if(!send_all(triggered_connection))
                         {
                             delete_http_connection(worker_id,triggered_connection);
@@ -2005,7 +2029,7 @@ void http_worker_thread(int worker_id)
 
 
                     struct custom_bound_entry custom_page_generator;
-                    if(check_custom_bound_path(&full_path,&real_hostname,&custom_page_generator))
+                    if(check_custom_bound_path(full_path,&custom_page_generator))
                     {
                         // perform checking if the request is fully loaded
                         if(triggered_connection[0]->request.request_method == HTTP_METHOD_POST && !is_POST_request_complete(triggered_connection))
@@ -2033,6 +2057,8 @@ void http_worker_thread(int worker_id)
                                         SERVER_JOURNAL_WRITE_ERROR.unlock();
 
                                         set_http_error_page(triggered_connection,400);
+                                        SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                                        
                                         if(!send_all(triggered_connection))
                                         {
                                                 delete_http_connection(worker_id,triggered_connection);
@@ -2054,6 +2080,7 @@ void http_worker_thread(int worker_id)
                         triggered_connection[0]->response.response_headers["Content-Type"] = "text/html; charset=utf-8";
                         
                         run_custom_page_generator(triggered_connection,worker_id,&custom_page_generator);
+                        
                         continue;
                     }
 
@@ -2066,6 +2093,8 @@ void http_worker_thread(int worker_id)
                         SERVER_JOURNAL_WRITE_ERROR.unlock();
 
                         set_http_error_page(triggered_connection,405);
+                        SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                        
                         if(!send_all(triggered_connection))
                         {
                             delete_http_connection(worker_id,triggered_connection);
@@ -2077,13 +2106,12 @@ void http_worker_thread(int worker_id)
                         continue;
                     }
 
-                    full_path = rectify_path(&full_path);
-                    //std::cout << full_path << std::endl;
-
                     uint64_t requested_file_size; time_t requested_file_mdate; bool is_folder;
                     if(get_file_info(&full_path,&requested_file_size,&requested_file_mdate,&is_folder) == -1) // get file size and modification date
                     {
                         set_http_error_page(triggered_connection,404);
+                        SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                        
                         if(!send_all(triggered_connection))
                         {
                             delete_http_connection(worker_id,triggered_connection);
@@ -2099,6 +2127,8 @@ void http_worker_thread(int worker_id)
                     if(is_folder)
                     {
                         generate_http_folder_response(&full_path,triggered_connection);
+                        SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                        
                         if(!send_all(triggered_connection))
                         {
                             delete_http_connection(worker_id,triggered_connection);
@@ -2127,6 +2157,8 @@ void http_worker_thread(int worker_id)
                             SERVER_JOURNAL_WRITE_ERROR.unlock();
 
                             set_http_error_page(triggered_connection,400);
+                            SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                            
                             if(!send_all(triggered_connection))
                             {
                                 delete_http_connection(worker_id,triggered_connection);
@@ -2142,7 +2174,9 @@ void http_worker_thread(int worker_id)
                         {
                             triggered_connection[0]->response.response_code = 304;
                             generate_http_output(triggered_connection);
+                            SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
                             triggered_connection[0]->state = HTTP_STATE_CONTENT_BOUND;
+                            
                             if(!send_all(triggered_connection))
                             {
                                 delete_http_connection(worker_id,triggered_connection);
@@ -2168,6 +2202,8 @@ void http_worker_thread(int worker_id)
                             SERVER_JOURNAL_WRITE_ERROR.unlock();
 
                             set_http_error_page(triggered_connection,416);
+                            SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                            
                             if(!send_all(triggered_connection))
                             {
                                 delete_http_connection(worker_id,triggered_connection);
@@ -2191,6 +2227,8 @@ void http_worker_thread(int worker_id)
                             SERVER_JOURNAL_WRITE_ERROR.unlock();
 
                             set_http_error_page(triggered_connection,416);
+                            SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                            
                             if(!send_all(triggered_connection))
                             {
                                 delete_http_connection(worker_id,triggered_connection);
@@ -2221,6 +2259,7 @@ void http_worker_thread(int worker_id)
                     if(triggered_connection[0]->request.request_method == HTTP_METHOD_HEAD)
                     {
                         generate_http_output(triggered_connection);
+                        SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
                         if(!send_all(triggered_connection))
                         {
                             delete_http_connection(worker_id,triggered_connection);
@@ -2241,11 +2280,13 @@ void http_worker_thread(int worker_id)
                         SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING),true);
                         SERVER_JOURNAL_WRITE(" The server is unable to open the following resource!\n",true);
                         SERVER_JOURNAL_WRITE("Path: ",true);
-                       // SERVER_JOURNAL_WRITE("Path: ",true);
+                        SERVER_JOURNAL_WRITE(full_path,true);
                         SERVER_JOURNAL_WRITE("\n\n",true);
                         SERVER_JOURNAL_WRITE_ERROR.unlock();
 
                         set_http_error_page(triggered_connection,500);
+                        SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+                        
                         if(!send_all(triggered_connection))
                         {
                             delete_http_connection(worker_id,triggered_connection);
@@ -2257,7 +2298,8 @@ void http_worker_thread(int worker_id)
                         continue;
                     }
 
-
+		    SERVER_JOURNAL_LOG_REQUEST(triggered_connection);
+		    
                     generate_http_output(triggered_connection); // send headers only
                     triggered_connection[0]->state = HTTP_STATE_FILE_BOUND;
                     if(!send_all(triggered_connection))
@@ -2305,8 +2347,6 @@ void http_worker_thread(int worker_id)
                     triggered_connection[0]->state = HTTP_STATE_INIT;
                 }
                 #endif
-
-
             }
 
 
@@ -2425,7 +2465,13 @@ void http_worker_thread(int worker_id)
 
 void init_workers(int close_trigger)
 {	
-        for(unsigned int i=0; i<str2uint(&SERVER_CONFIGURATION["server_workers"]); i++)
+	size_t num_workers = str2uint(&SERVER_CONFIGURATION["server_workers"]);
+	init_file_access_control_API(num_workers);
+	
+	if(is_server_load_balancer_fair)
+        	connections_per_worker = std::vector<std::atomic<int>>(num_workers);
+        
+        for(unsigned int i=0; i<num_workers; i++)
         {
                 struct http_worker_node this_worker;
 
@@ -2454,8 +2500,10 @@ void init_workers(int close_trigger)
         }
         
         
-        if(is_server_load_balancer_fair)
-        	connections_per_worker = std::vector<std::atomic<int>>(str2uint(&SERVER_CONFIGURATION["server_workers"]));
+        SERVER_JOURNAL_WRITE_NORMAL.lock();
+        SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING));
+        SERVER_JOURNAL_WRITE(" The server started successfully!\n\n");
+        SERVER_JOURNAL_WRITE_NORMAL.unlock();
 }
 
 
@@ -2493,7 +2541,6 @@ void free_worker_aux_modules(int worker_id)
         delete(http_workers[worker_id].mysql_db_handle);
         #endif
 }
-
 
 
 
