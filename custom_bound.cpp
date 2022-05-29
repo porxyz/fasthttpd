@@ -4,6 +4,7 @@
 
 #include "helper_functions.h"
 #include "server_config.h"
+#include "server_journal.h"
 #include "http_worker.h"
 #include "custom_bound.h"
 
@@ -28,8 +29,10 @@ void run_custom_page_generator(std::list<struct http_connection>::iterator* curr
 		current_connection[0]->recv_buffer.clear();
 		generator->page_generator(current_connection[0],worker_id);
 		current_connection[0]->response.response_headers["Content-Length"] = int2str(current_connection[0]->response.response_body.size());
+		
 		generate_http_output(current_connection);
-
+		SERVER_JOURNAL_LOG_REQUEST(current_connection);
+		
 		if(!send_all(current_connection))
 		{
 			delete_http_connection(worker_id,current_connection);
@@ -106,3 +109,7 @@ void load_custom_bound_paths()
 	add_custom_bound_path(db_insert_generator,"/db_insert","localhost");
 	#endif
 }
+
+
+
+
