@@ -1,4 +1,3 @@
-#ifndef __custom_bound_incl__
 #define __custom_bound_incl__
 
 #include <list>
@@ -13,7 +12,7 @@
 
 #define HTTP_GET_ARG(X) http_connection->request.URI_query[X]
 #define HTTP_GET_ARGC (http_connection->request.URI_query.size())
-#define HTTP_GET_EXISTS(X) (http_connection->request.URI_query.find(X) != http_connection->request.URI_query.end())
+#define HTTP_GET_ARG_EXISTS(X) (http_connection->request.URI_query.find(X) != http_connection->request.URI_query.end())
 
 #define HTTP_POST_ARG(X) http_connection->request.POST_query->at(X)
 #define HTTP_POST_ARGC (http_connection->request.POST_query) ? (http_connection->request.POST_query->size()) : 0
