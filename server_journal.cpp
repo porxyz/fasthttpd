@@ -14,7 +14,6 @@
 #include "server_journal.h"
 #include "helper_functions.h"
 
-
 bool SERVER_JOURNAL_DISABLED = false;
 bool SERVER_JOURNAL_LOCALTIME_REPORTING = false;
 
@@ -29,7 +28,6 @@ void SERVER_JOURNAL_INIT(const char* info_file,const char* error_file)
 {
 	if(error_file != NULL)
 	{
-		//std::ofstream error_file_stream;
 		error_file_stream.open(error_file,std::ios::app);
 		
 		if(!error_file_stream.is_open())
@@ -38,7 +36,6 @@ void SERVER_JOURNAL_INIT(const char* info_file,const char* error_file)
 			std::cerr << "Error code: 0x" << std::hex << errno << std::endl << strerror(errno) << std::endl << std::endl << std::dec;
 			error_file_stream.close();
 		}
-		
 		else
 			std::cerr.rdbuf(error_file_stream.rdbuf());
 		
@@ -159,6 +156,118 @@ void SERVER_ERROR_JOURNAL_conn_exceeded()
 	SERVER_JOURNAL_WRITE_ERROR.unlock();
 }
 
-
-
+/*
+FORMAT:
+[time] PROCESSED_REQUEST: hostname:port client_ip:port protocol_version request_method "URI_path" http_status "user_agent"
+*/
+void SERVER_JOURNAL_LOG_REQUEST(std::list<struct http_connection>::iterator* http_connection)
+{
+	if(!http_connection or SERVER_JOURNAL_DISABLED)
+		return;
+	
+	SERVER_JOURNAL_WRITE_NORMAL.lock();
+        SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING));
+        SERVER_JOURNAL_WRITE(" HTTP REQUEST PROCESSED: ");
+        
+        auto hostname_it = http_connection[0]->request.request_headers.find("Host");
+        if(hostname_it != http_connection[0]->request.request_headers.end())
+        	SERVER_JOURNAL_WRITE(hostname_it->second);
+	else
+		SERVER_JOURNAL_WRITE("-");
+		
+	SERVER_JOURNAL_WRITE(":");
+	SERVER_JOURNAL_WRITE(http_connection[0]->server_port);
+	SERVER_JOURNAL_WRITE(" ");
+	SERVER_JOURNAL_WRITE(http_connection[0]->remote_addr);
+	SERVER_JOURNAL_WRITE(":");
+	SERVER_JOURNAL_WRITE(http_connection[0]->remote_port);
+	SERVER_JOURNAL_WRITE(" ");
+	
+	if(http_connection[0]->http_version == HTTP_VERSION_1)
+		SERVER_JOURNAL_WRITE("HTTP/1 ");
+		
+	else if(http_connection[0]->http_version == HTTP_VERSION_1_1)
+		SERVER_JOURNAL_WRITE("HTTP/1.1 ");
+		
+	else
+		SERVER_JOURNAL_WRITE("- ");
+		
+		
+	if(http_connection[0]->request.request_method == HTTP_METHOD_GET)
+		SERVER_JOURNAL_WRITE("GET ");
+		
+	else if(http_connection[0]->request.request_method == HTTP_METHOD_POST)
+		SERVER_JOURNAL_WRITE("POST ");
+		
+	else if(http_connection[0]->request.request_method == HTTP_METHOD_HEAD)
+		SERVER_JOURNAL_WRITE("HEAD ");
+		
+	else if(http_connection[0]->request.request_method == HTTP_METHOD_PUT)
+		SERVER_JOURNAL_WRITE("PUT ");
+		
+	else if(http_connection[0]->request.request_method == HTTP_METHOD_DELETE)
+		SERVER_JOURNAL_WRITE("DELETE ");
+		
+	else if(http_connection[0]->request.request_method == HTTP_METHOD_OPTIONS)
+		SERVER_JOURNAL_WRITE("OPTIONS ");
+		
+	else if(http_connection[0]->request.request_method == HTTP_METHOD_CONNECT)
+		SERVER_JOURNAL_WRITE("CONNECT ");
+		
+	else if(http_connection[0]->request.request_method == HTTP_METHOD_TRACE)
+		SERVER_JOURNAL_WRITE("TRACE ");
+		
+	else if(http_connection[0]->request.request_method == HTTP_METHOD_PATCH)
+		SERVER_JOURNAL_WRITE("PATCH ");
+		
+	else
+		SERVER_JOURNAL_WRITE("- ");
+	
+	SERVER_JOURNAL_WRITE("\"");
+	if(!http_connection[0]->request.URI_path.empty())
+	{
+		SERVER_JOURNAL_WRITE(http_connection[0]->request.URI_path);
+		if(!http_connection[0]->request.URI_query.empty())
+		{
+			SERVER_JOURNAL_WRITE("?");
+			
+			auto i=http_connection[0]->request.URI_query.begin();
+			auto next_elem = i;
+			next_elem++;
+			
+			for(; i!=http_connection[0]->request.URI_query.end(); ++i)
+			{
+				SERVER_JOURNAL_WRITE(url_encode(&(i->first)));
+				if(!i->second.empty())
+				{
+					SERVER_JOURNAL_WRITE("=");
+					SERVER_JOURNAL_WRITE(url_encode(&(i->second)));
+				}
+				
+				
+				if(next_elem != http_connection[0]->request.URI_query.end())
+				{
+					SERVER_JOURNAL_WRITE("&");
+					next_elem++;
+				}
+			}
+		}
+	}
+	SERVER_JOURNAL_WRITE("\" ");
+	
+	SERVER_JOURNAL_WRITE(http_connection[0]->response.response_code);
+	SERVER_JOURNAL_WRITE(" \"");
+	
+	auto UA_it = http_connection[0]->request.request_headers.find("User-Agent");
+	if(UA_it == http_connection[0]->request.request_headers.end())
+		UA_it = http_connection[0]->request.request_headers.find("User-agent");
+		
+        if(UA_it != http_connection[0]->request.request_headers.end())
+        	SERVER_JOURNAL_WRITE(UA_it->second);
+	else
+		SERVER_JOURNAL_WRITE("-");
+	
+	SERVER_JOURNAL_WRITE("\"\n");
+        SERVER_JOURNAL_WRITE_NORMAL.unlock();
+}
 
