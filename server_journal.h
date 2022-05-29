@@ -5,6 +5,8 @@
 #include <string>  
 #include <mutex> 
 
+#include "http_worker.h"
+
 extern bool SERVER_JOURNAL_DISABLED;
 extern bool SERVER_JOURNAL_LOCALTIME_REPORTING;
 
@@ -35,7 +37,7 @@ void SERVER_ERROR_JOURNAL_openssl_err(const char* s);
 #endif
 
 void SERVER_ERROR_JOURNAL_conn_exceeded();
-
+void SERVER_JOURNAL_LOG_REQUEST(std::list<struct http_connection>::iterator* http_connection);
 
 
 #endif
