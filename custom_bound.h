@@ -1,3 +1,4 @@
+#ifndef __custom_bound_incl__
 #define __custom_bound_incl__
 
 #include <list>
