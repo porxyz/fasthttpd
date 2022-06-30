@@ -663,7 +663,6 @@ bool parse_multipart_form_data(const std::string* raw_request,const std::string*
         if(!raw_request or !boundary or !POST_query or !POST_files or !POST_arg_limit_exceeded or !POST_files_limit_exceeded)
                 return false;
 
-
         bool use_standard_newline = true;
         size_t POST_body_position = raw_request->find("\r\n\r\n");
 
@@ -1617,17 +1616,49 @@ void free_http_connection(std::list<struct http_connection>::iterator* current_c
 
 }
 
+bool is_http_connection_keepalive(std::list<struct http_connection>::iterator* http_connection)
+{
+	auto it = http_connection[0]->request.request_headers.find("Connection");
+
+        if(it == http_connection[0]->request.request_headers.end())
+        	it = http_connection[0]->request.request_headers.find("connection");
+                        
+	if(it == http_connection[0]->request.request_headers.end())
+		return false;
+		
+	if(it->second == "keep-alive" or it->second == "Keep-alive" or it->second == "Keep-Alive")
+		return true;
+		
+	return false;
+}
+
+void decode_http_connection_POST_type(std::list<struct http_connection>::iterator* http_connection)
+{
+	auto it = http_connection[0]->request.request_headers.find("Content-Type");
+	
+	if(it == http_connection[0]->request.request_headers.end())
+        	it = http_connection[0]->request.request_headers.find("Content-type");
+        	
+        if(it == http_connection[0]->request.request_headers.end())
+        	it = http_connection[0]->request.request_headers.find("content-type");
+        	
+        if(it == http_connection[0]->request.request_headers.end())
+		return;
+                        
+	if(it->second == "application/x-www-form-urlencoded")
+        	http_connection[0]->request.POST_type = HTTP_POST_APPLICATION_X_WWW_FORM_URLENCODED;
+
+        else if(memcmp(it->second.c_str(),"multipart/form-data",19) == 0)
+		http_connection[0]->request.POST_type = HTTP_POST_MULTIPART_FORM_DATA;
+
+                                
+}
+
 void delete_http_connection(size_t worker_id,std::list<struct http_connection>::iterator* current_connection,bool allow_keepalive,bool lock_mutex)
 {
         if(allow_keepalive and (current_connection[0]->state != HTTP_STATE_INIT or current_connection[0]->state != HTTP_STATE_SSL_INIT))
         {
-                auto keepalive_iter = current_connection[0]->request.request_headers.find("Connection");
-
-                if(keepalive_iter == current_connection[0]->request.request_headers.end())
-                        keepalive_iter = current_connection[0]->request.request_headers.find("connection");
-
-
-                if(keepalive_iter != current_connection[0]->request.request_headers.end() and keepalive_iter->second == "keep-alive")
+                if(is_http_connection_keepalive(current_connection))
                 {
                         free_http_connection(current_connection);
                         current_connection[0]->milisecond_timeout = str2uint(&SERVER_CONFIGURATION["request_timeout"]) * 1000;
@@ -1989,7 +2020,7 @@ void http_worker_thread(int worker_id)
 
 
                     // keep alive
-                    if(triggered_connection[0]->request.request_headers.find("Connection") != triggered_connection[0]->request.request_headers.end() and triggered_connection[0]->request.request_headers["Connection"] == "keep-alive")
+                    if(is_http_connection_keepalive(triggered_connection))
                             triggered_connection[0]->response.response_headers["Connection"] = "keep-alive";
 
 
@@ -2038,16 +2069,7 @@ void http_worker_thread(int worker_id)
                         //parse POST request if fully loaded
                         if(triggered_connection[0]->request.request_method == HTTP_METHOD_POST && triggered_connection[0]->request.POST_type == HTTP_POST_TYPE_UNDEFINED)
                         {
-                                if(triggered_connection[0]->request.request_headers.find("Content-Type") != triggered_connection[0]->request.request_headers.end())
-                                {
-
-                                        if(triggered_connection[0]->request.request_headers["Content-Type"] == std::string("application/x-www-form-urlencoded"))
-                                                triggered_connection[0]->request.POST_type = HTTP_POST_APPLICATION_X_WWW_FORM_URLENCODED;
-
-                                        else if(memcmp(triggered_connection[0]->request.request_headers["Content-Type"].c_str(),"multipart/form-data",19) == 0)
-                                                triggered_connection[0]->request.POST_type = HTTP_POST_MULTIPART_FORM_DATA;
-
-                                }
+                                decode_http_connection_POST_type(triggered_connection);
 
                                 if(!parse_http_request_POST_body(triggered_connection,max_POST_arg_limit,max_upload_files_limit,continue_if_arg_limit_exceeded))
                                 {
@@ -2502,7 +2524,7 @@ void init_workers(int close_trigger)
         
         SERVER_JOURNAL_WRITE_NORMAL.lock();
         SERVER_JOURNAL_WRITE(journal_strtime(SERVER_JOURNAL_LOCALTIME_REPORTING));
-        SERVER_JOURNAL_WRITE(" The server started successfully!\n\n");
+        SERVER_JOURNAL_WRITE(" The server started successfully!\n");
         SERVER_JOURNAL_WRITE_NORMAL.unlock();
 }
 
