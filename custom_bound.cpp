@@ -106,12 +106,8 @@ void load_custom_bound_paths()
 {
 	//add_custom_bound_path(index_gen,"/","localhost");
 	
-	
 	add_custom_bound_path(post_test_gen,"/post_test","localhost");
 	add_custom_bound_path(cookie_test_gen,"/cookie_test","localhost");
-	
-	add_custom_bound_path(bmp_grayscale_generator,"/image.php");
-	add_custom_bound_path(auth_generator,"/auth.php");
 	
 	#ifndef NO_MOD_MYSQL
 	add_custom_bound_path(db_insert_generator,"/db_insert","localhost");
