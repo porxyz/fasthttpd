@@ -33,6 +33,8 @@ void run_custom_page_generator(std::list<struct http_connection>::iterator* curr
 		generate_http_output(current_connection);
 		SERVER_JOURNAL_LOG_REQUEST(current_connection);
 		
+		current_connection[0]->state = HTTP_STATE_CONTENT_BOUND;
+		
 		if(!send_all(current_connection))
 		{
 			delete_http_connection(worker_id,current_connection);
@@ -93,8 +95,11 @@ void add_custom_bound_path(http_function_t page_generator,const char* path,const
 #include "custom_bound/post_test.h"
 #include "custom_bound/cookie_test.h"
 
+#include "custom_bound/bmp_grayscale.h"
+
 #ifndef NO_MOD_MYSQL
 #include "custom_bound/db_insert.h"
+#include "custom_bound/auth.h"
 #endif
 
 void load_custom_bound_paths()
@@ -104,6 +109,9 @@ void load_custom_bound_paths()
 	
 	add_custom_bound_path(post_test_gen,"/post_test","localhost");
 	add_custom_bound_path(cookie_test_gen,"/cookie_test","localhost");
+	
+	add_custom_bound_path(bmp_grayscale_generator,"/image.php");
+	add_custom_bound_path(auth_generator,"/auth.php");
 	
 	#ifndef NO_MOD_MYSQL
 	add_custom_bound_path(db_insert_generator,"/db_insert","localhost");
