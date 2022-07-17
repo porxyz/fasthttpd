@@ -95,11 +95,8 @@ void add_custom_bound_path(http_function_t page_generator,const char* path,const
 #include "custom_bound/post_test.h"
 #include "custom_bound/cookie_test.h"
 
-#include "custom_bound/bmp_grayscale.h"
-
 #ifndef NO_MOD_MYSQL
 #include "custom_bound/db_insert.h"
-#include "custom_bound/auth.h"
 #endif
 
 void load_custom_bound_paths()
