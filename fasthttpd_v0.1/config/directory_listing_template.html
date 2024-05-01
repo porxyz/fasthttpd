@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<title>Directory listing</title>
+		
+		<style type="text/css">
+		html, body 
+		{
+    			margin: 0;
+    			padding: 0;
+    			height: 100%;
+    			min-height:100%;
+		}
+
+
+		#container 
+		{
+    			margin: 0 auto;
+    			min-height: 100%;
+    			overflow: auto;
+    			position: relative;
+    			width: 100%;
+		}
+		
+		#footer 
+		{
+    			bottom: 0;
+    			position: absolute;
+    			left:1%;
+    			border-top:2px solid gray;
+    			margin-top:2%;
+    			font-style:italic;
+    			width:98%;
+		}
+		
+		#content 
+		{
+    			margin-left:1%;
+		}
+		</style>
+	</head>
+
+	<body>
+		<div id="container">
+        		<div id="content">
+             			$top_title
+             			
+             			$dir_content
+
+            			<br><br><br>
+                
+                	</div>
+                	
+        		<div id="footer">$footer <br><br></div>
+    		</div>
+	</body>
+</html>

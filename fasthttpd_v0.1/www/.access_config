@@ -1,0 +1,10 @@
+#access configuration
+
+order = deny
+fake_404 = true
+
+#rules
+.access_config
+*.txt
+*.php
+

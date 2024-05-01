@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta lang = "en">
+<title>Grayscale image generator</title>
+
+<style>
+html, body
+{
+	padding:0;
+	margin:0;
+}
+
+.image_container
+{
+	position:absolute;
+	top:15vh;
+	
+	width:30vw;
+	height:20vw;
+
+	border:2px solid black;
+}
+
+.image_container_text
+{
+	position:absolute;
+	top:50%;
+	left:50%;
+	transform:translate(-50%,-50%);
+	white-space: nowrap;
+	user-select:none;
+}
+
+#color_image_container
+{
+	left:10vw;
+}
+
+#bw_image_container
+{
+	left:60vw;
+}
+
+#upload_button
+{
+	position:absolute;
+
+	width:20vw;
+	height:3.5vw;
+
+	top:75vh;
+	left:50%;
+
+	transform:translateX(-50%);
+
+	border:2px solid black;
+	border-radius:1vh;
+
+	background-color:blue;
+	background: linear-gradient(to bottom, #c5deea 0%,#8abbd7 31%,#066dab 100%);
+
+	color:white;
+	font-weight:bold;
+	white-space: nowrap;
+
+	user-select:none;
+
+	cursor:pointer;
+}
+
+#upload_button:hover
+{
+	background: linear-gradient(to bottom, #b5ceda 0%,#7aabc7 31%,#065d9b 100%);
+	box-shadow:0 0 1px 2px rgba(8, 191, 204, 0.7);
+}
+</style>
+
+<script>
+
+function handle_image_upload(ev)
+{
+	let files = ev.target.files;
+  	let formData = new FormData();
+  	
+  	formData.append('image', files[0]);
+  	
+  	let left_image_container = document.getElementById("color_image_container");
+	let right_image_container = document.getElementById("bw_image_container");
+
+  	left_image_container.innerHTML = "";
+	right_image_container.innerHTML = "";
+
+	left_image_container.style.border = "2px solid black";
+	right_image_container.style.border = left_image_container.style.border;
+  	
+  	let req = new XMLHttpRequest();
+  	
+  	req.timeout = 5000;
+	req.responseType = 'blob';
+
+	req.onload = function()
+	{
+		if(req.status == 200)
+		{
+			let image_container_geometry = left_image_container.getBoundingClientRect();
+
+			let grayscale_image = document.createElement("img");
+			grayscale_image.src = URL.createObjectURL(req.response);
+
+			left_image_container.style.border = "none";
+			right_image_container.style.border = left_image_container.style.border;
+			
+			grayscale_image.onload = function()
+			{
+				let image_w = grayscale_image.naturalWidth;
+				let image_h = grayscale_image.naturalHeight;
+
+				if(image_w > image_container_geometry.width)
+				{
+					let scale_factor = image_w / image_container_geometry.width;
+					grayscale_image.width = image_w / scale_factor;
+					grayscale_image.height = image_h / scale_factor;
+
+					image_w /= scale_factor;
+					image_h /= scale_factor;
+				}
+
+				if(image_h > image_container_geometry.height)
+				{
+					let scale_factor = image_h / image_container_geometry.height;
+					grayscale_image.width = image_w / scale_factor;
+					grayscale_image.height = image_h / scale_factor;
+
+					image_w /= scale_factor;
+					image_h /= scale_factor;
+				}
+
+				grayscale_image.style.position = "absolute";
+				grayscale_image.style.top = ((image_container_geometry.height / 2) - (image_h / 2)) + "px";
+				grayscale_image.style.left = ((image_container_geometry.width / 2) - (image_w / 2)) + "px";
+
+
+				let color_image = document.createElement("img");
+				color_image.src = URL.createObjectURL(files[0]);
+
+				color_image.width = grayscale_image.width;
+				color_image.height = grayscale_image.height;
+				color_image.style.position = "absolute";
+				color_image.style.top = ((image_container_geometry.height / 2) - (image_h / 2)) + "px";
+				color_image.style.left = ((image_container_geometry.width / 2) - (image_w / 2)) + "px";
+
+				right_image_container.appendChild(grayscale_image);
+				left_image_container.appendChild(color_image);
+			}
+
+		}	
+		else
+		{
+			left_image_container.innerHTML = "<span class=\"image_container_text\" style=\"color:red; font-weight:bold;\">Network error</span>";
+			right_image_container.innerHTML = left_image_container.innerHTML;
+		}
+	};
+	
+	req.ontimeout = function()
+			{
+				left_image_container.innerHTML = "<span class=\"image_container_text\" style=\"color:red; font-weight:bold;\">Network error</span>";
+				right_image_container.innerHTML = left_image_container.innerHTML;
+			}
+	req.onerror = function()
+			{
+				left_image_container.innerHTML = "<span class=\"image_container_text\" style=\"color:red; font-weight:bold;\">Network error</span>";
+				right_image_container.innerHTML = left_image_container.innerHTML;
+			}
+  	
+	req.open("POST", "image.php");	
+	req.send(formData); 
+}
+
+function upload_image()
+{
+	document.getElementById("input_image").click();
+}
+
+</script>
+
+</head>
+<body>
+
+
+
+<div id="color_image_container" class="image_container">
+<span class="image_container_text">Color image</span>
+</div>
+
+<div id="bw_image_container" class="image_container">
+<span class="image_container_text">Grayscale image</span>
+</div>
+
+<div id="upload_button" onclick="upload_image();"><span style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);">Upload 24-bit BMP image</span></div>
+
+<input type="file" id="input_image" accept="image/bmp" onchange="handle_image_upload(event);" style="display:none;">
+
+</body>
+</html>
