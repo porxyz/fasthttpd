@@ -184,6 +184,9 @@ std::string get_MIME_type_by_ext(const std::string* filename)
 	else if(ext == "abw")
 		result = "application/x-abiword";
 		
+	else if(ext == "apng")
+		result = "image/apng";
+		
 	else if(ext == "avi")
 		result = "video/x-msvideo";
 		
@@ -251,7 +254,10 @@ std::string get_MIME_type_by_ext(const std::string* filename)
 		result = "image/jpeg";
 	
 	else if(ext == "js")
-		result = "application/javascript";
+		result = "text/javascript";
+		
+	else if(ext == "jsx")
+		result = "text/jsx";
 	
 	else if(ext == "json")
 		result = "application/json";
