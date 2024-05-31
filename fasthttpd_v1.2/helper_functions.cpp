@@ -185,7 +185,7 @@ std::string get_MIME_type_by_ext(const std::string* filename)
 		result = "application/x-abiword";
 		
 	else if(ext == "apng")
-		result = "image/apng";
+		result = "image/png";
 		
 	else if(ext == "avi")
 		result = "video/x-msvideo";
