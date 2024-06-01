@@ -1,0 +1,12 @@
+[Unit]
+Description=Fasthttpd web server and framework
+After=syslog.target network.target nss-lookup.target
+
+[Service]
+Type=simple
+PIDFile=/var/run/fasthttpd.pid
+ExecStart=/opt/fasthttpd/fasthttpd /etc/fasthttpd/main.conf
+ExecStop=/usr/bin/kill -s QUIT $MAINPID
+
+[Install]
+WantedBy=multi-user.target

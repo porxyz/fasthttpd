@@ -7,9 +7,9 @@ enable_MOD_MYSQL = True
 enable_https = True
 debug = False
 
-COMPILER = "g++"
-COMPILER_FLAGS = "-std=c++11 -Wall -Wfatal-errors"
-LLIBS = "-lpthread -lnghttp2"
+COMPILER = "clang++"
+COMPILER_FLAGS = "-std=c++11 -Wall -Wfatal-errors -pthread"
+LLIBS = "-lnghttp2"
 
 if debug:
 	COMPILER_FLAGS += " -O0 -ggdb -rdynamic"
