@@ -50,20 +50,23 @@ int HTTP1_Connection_Send_Data(const int worker_id, struct GENERIC_HTTP_CONNECTI
 	bool should_stop = false;
 	while (!should_stop)
 	{
-		int32_t send_bytes = Network_Write_Bytes(conn, (void*)http_conn->send_buffer.c_str(), http_conn->send_buffer.size() - http_conn->send_buffer_offset);
-		if (send_bytes < 0)
+        const char* send_buffer = (http_conn->send_buffer.c_str() +  http_conn->send_buffer_offset);
+        size_t bytes_to_send = http_conn->send_buffer.size() - http_conn->send_buffer_offset;
+
+		int32_t sent_bytes = Network_Write_Bytes(conn, (void*)send_buffer, bytes_to_send);
+		if (sent_bytes < 0)
 		{
 			Generic_Connection_Delete(worker_id, conn);
 			return HTTP_CONNECTION_DELETED;
 		}
 
-		if (send_bytes == 0)
+		if (sent_bytes == 0)
 		{
 			should_stop = true;
 			continue;
 		}
 
-		http_conn->send_buffer_offset += send_bytes;
+		http_conn->send_buffer_offset += sent_bytes;
 
 		if(http_conn->send_buffer_offset == http_conn->send_buffer.size())
 		{
